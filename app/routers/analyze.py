@@ -1,0 +1,53 @@
+from fastapi import APIRouter, Form, Header, HTTPException, UploadFile
+
+from app.config import get_settings
+from app.models.assessment import AssessmentResult
+
+
+class AnalyzeController:
+    """Handles HTTP para sa POST /analyze ug GET /health. Walay business logic diri."""
+
+    def __init__(self) -> None:
+        self.router = APIRouter(tags=["analyze"])
+        self.router.add_api_route(
+            "/analyze",
+            self.analyze,
+            methods=["POST"],
+            response_model=AssessmentResult,
+        )
+        self.router.add_api_route("/health", self.health, methods=["GET"])
+
+    async def analyze(
+        self,
+        file: UploadFile,
+        passage_id: str = Form(...),
+        x_api_key: str = Header(..., alias="X-API-Key"),
+    ) -> AssessmentResult:
+        """Accepts a video upload ug returns stub AssessmentResult. Mo-raise og 401 kung invalid ang key."""
+        self._check_api_key(x_api_key)
+        return AssessmentResult(
+            wpm=85.5,
+            word_recognition_pct=92.3,
+            reading_level="Instructional",
+            correct=48,
+            mispronunciation=2,
+            substitution=1,
+            omission=1,
+            insertion=0,
+            repetition=0,
+            refusal_to_pronounce=0,
+            finger_pointing=False,
+            lip_movement=False,
+            head_movement=False,
+            voice_too_soft=False,
+            loses_place=False,
+        )
+
+    async def health(self) -> dict[str, str]:
+        """Simple liveness check."""
+        return {"status": "ok"}
+
+    def _check_api_key(self, key: str) -> None:
+        """Mo-raise og 401 kung dili match ang X-API-Key sa settings."""
+        if key != get_settings().API_KEY:
+            raise HTTPException(status_code=401, detail="Invalid API key")
