@@ -6,3 +6,5 @@ app/__pycache__/__init__.cpython-312.pyc
 app/models/__pycache__/__init__.cpython-312.pyc
 app/routers/__pycache__/__init__.cpython-312.pyc
 .gitignore
+app/models/__pycache__/assessment.cpython-312.pyc
+app/routers/__pycache__/analyze.cpython-312.pyc
