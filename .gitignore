@@ -1,2 +1,8 @@
 /.venv
 .env
+app/__pycache__/config.cpython-312.pyc
+app/__pycache__/main.cpython-312.pyc
+app/__pycache__/__init__.cpython-312.pyc
+app/models/__pycache__/__init__.cpython-312.pyc
+app/routers/__pycache__/__init__.cpython-312.pyc
+.gitignore

@@ -1,0 +1,130 @@
+---
+name: generate-and-verify
+description: >
+  Generate Python code for this project, then automatically verify it before handing
+  back. Use this skill whenever the user asks you to implement, create, scaffold, or
+  write any Python file, class, service, router, pipeline, or model. Trigger on:
+  "implement X", "create a class for Y", "write the Z service", "scaffold this",
+  "build the pipeline", "add a repository", or any request to produce new Python code.
+  Do NOT hand back unverified code — always complete the full generate → verify → fix
+  loop first.
+---
+
+# Generate-and-Verify Workflow
+
+Every piece of code you write in this project goes through this loop before you
+report it as done. Never skip a step, even if the code looks obviously correct.
+
+## The Loop
+
+```
+GENERATE → SHOW → APPROVE → WRITE → PYRIGHT → SOLID-CHECK → if issues: FIX → repeat → DOCSTRINGS → DESIGN-DOCS → JOURNAL → REPORT
+```
+
+### Step 1 — Generate
+
+Draft the code following both project standards:
+- **SOLID OOP** (see `.claude/skills/solid-oop/SKILL.md`): class-based controllers,
+  service layer, Protocol interfaces, dependency injection via `Depends()`, one class
+  one responsibility, no bare route functions.
+- **Strong types** (see `.claude/skills/python-strong-types/SKILL.md`): Python 3.12
+  syntax, all params and return types annotated, TypedDict/Pydantic/dataclass for
+  data shapes, no bare `dict` or `list`.
+
+Do **not** write any file yet.
+
+### Step 2 — Show for Approval
+
+Display the full code in a fenced block with the target file path as the label:
+
+```python
+# app/services/go2/scoring_engine.py
+...
+```
+
+State the target path explicitly and wait for the user to approve before proceeding.
+If the user requests changes, revise and show again. Do not write until approved.
+
+### Step 3 — Write
+
+Once approved, write the file to its correct project path.
+
+### Step 4 — Pyright
+
+Run pyright in strict mode on the file you just wrote:
+
+```bash
+cd /home/christian/dev/SE-Module-02
+.venv/bin/pyright <file>
+```
+
+- **0 errors** → proceed to Step 3
+- **Errors** → fix them in the file, re-run pyright, repeat until 0 errors
+
+Do not proceed with pyright errors remaining.
+
+### Step 5 — SOLID Self-Check
+
+Read back what you just wrote and answer each question:
+
+| Principle | Question | Pass? |
+|---|---|---|
+| **S** | Does each class have exactly one reason to change? | |
+| **O** | Is new behaviour added via new classes, not edits to existing ones? | |
+| **L** | Do all Protocol implementations return the same shape with the same semantics? | |
+| **I** | Are Protocols narrow (≤4 methods)? No class forced to implement methods it doesn't use? | |
+| **D** | Does each class depend on Protocols/abstractions, not concrete classes? Are concretes only wired in `dependencies.py`? | |
+
+Any "no" → fix the violation, return to Step 2.
+
+### Step 6 — Docstrings
+
+Add Bislish docstrings to every class and public method in the file you just wrote.
+Follow `.claude/skills/bislish-docs/SKILL.md` — concise, natural mix, no restatement
+of types. Update the file in place (already approved, so no second approval needed for
+docs-only additions).
+
+### Step 7 — Design Docs
+
+
+Generate or update the relevant HLD, LLD, and Mermaid UML files under `./docs/`.
+Follow `.claude/skills/design-docs/SKILL.md` — the table there maps each type of
+file written to which docs need creating or updating. Show docs for approval before
+writing, same as code.
+
+### Step 8 — Journal
+
+Append one entry to `docs/JOURNAL.md` following `.claude/skills/dev-journal/SKILL.md`.
+No approval needed — write it directly. Include it in the final report so the user
+can see what was logged.
+
+### Step 9 — Report
+
+Once the loop exits cleanly, report:
+
+```
+## Generated: <filename>
+
+**Pyright:** 0 errors (strict)
+
+**SOLID:**
+- S ✓ <one line on what each class's single responsibility is>
+- O ✓ <what Protocol/abstraction makes this open for extension>
+- L ✓ / N/A
+- I ✓ <protocol names and method counts>
+- D ✓ <what is injected vs what is concrete, where concretes are wired>
+
+**What was created:**
+<bullet list of classes, protocols, and methods>
+```
+
+Show the final file content after the report.
+
+## Shortcuts the Loop Allows
+
+- If a file already has 0 pyright errors and clearly passes SOLID, one pass is enough
+  — you don't need to iterate. The loop exists to catch mistakes, not to waste time.
+- If a file has no logic (e.g. a pure TypedDict or Pydantic model file), skip the
+  SOLID check — it doesn't apply to data-only files.
+- Run pyright on multiple files at once if you generated several in one task:
+  `.venv/bin/pyright app/services/go2/`
