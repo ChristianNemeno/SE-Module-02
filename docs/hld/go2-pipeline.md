@@ -17,6 +17,8 @@ The GO2 pipeline processes a student's reading audio recording to produce ASR-ba
 - `TranscriberProtocol` decouples the pipeline from WhisperX; any ASR backend can be swapped in
 - All whisperx calls isolated in `transcriber.py` with `# type: ignore` — typed boundary at `list[WordSegment]`
 - CPU device for pilot; swap to `"cuda"` in one place once driver is stable
+- `ScoringEngine` is stateless and instantiated per request — no models to preload, cheap to construct
+- Reading-level thresholds use `>=` so boundary ties (exactly 97% / 91%) resolve to the higher classification; error set excludes `insertion` and `repetition` per Phil-IRI
 
 ## Dependencies
 - `whisperx` — ASR + forced alignment (no type stubs)
@@ -34,4 +36,4 @@ The GO2 pipeline processes a student's reading audio recording to produce ASR-ba
 |---|---|
 | `WhisperXTranscriber` | [lld/go2/transcriber.md](../lld/go2/transcriber.md) |
 | `MiscueClassifier` | [lld/go2/miscue-classifier.md](../lld/go2/miscue-classifier.md) |
-| `ScoringEngine` | lld/go2/scoring-engine.md *(RR-023)* |
+| `ScoringEngine` | [lld/go2/scoring-engine.md](../lld/go2/scoring-engine.md) |
