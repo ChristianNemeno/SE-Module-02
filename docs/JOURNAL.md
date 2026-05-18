@@ -80,3 +80,34 @@
 - Tests: `9/9 passed` (`pytest test_rr022.py`)
 - SOLID: ✓ — S: classifier owns only alignment+taxonomy logic; O: `MiscueClassifierProtocol` allows new classifiers; I: 1-method Protocol; D: concrete not yet wired (deferred to RR-020 `dependencies.py`)
 - Docs: `lld/go2/miscue-classifier.md`, `lld/models/miscue.md`, `uml/class/go2-classes.md` (updated), `uml/class/models.md` (updated), `hld/go2-pipeline.md` (updated)
+
+---
+
+### 2026-05-18 · Iteration 4 — RR-023 WPM + Scoring + Reading Level
+
+**Added**
+- `app/models/scoring.py` — `ScoringResult` TypedDict (`wpm`, `word_recognition_pct`, `reading_level`) + `ScoringEngineProtocol`
+- `app/services/go2/scoring_engine.py` — `ScoringEngine`; `score()` public method + `_wpm()` / `_word_recognition_pct()` / `_reading_level()` private helpers; module-level constants `_INDEPENDENT_MIN_PCT=97.0`, `_INSTRUCTIONAL_MIN_PCT=91.0`
+- `tests/test_rr023.py` — 9 pytest unit tests covering all three thresholds, boundary ties, empty transcript, zero-passage-words, zero-duration audio (18/18 assertions passing)
+- `docs/lld/go2/scoring-engine.md` — LLD for `ScoringEngine`
+- `docs/lld/models/scoring.md` — LLD for `ScoringResult` / `ScoringEngineProtocol`
+
+**Changed**
+- `app/dependencies.py` — added `get_scoring_engine() -> ScoringEngineProtocol` provider (per-call instantiation; cheap, stateless)
+- `docs/uml/class/go2-classes.md` — added `ScoringEngineProtocol`, `ScoringEngine`, `ScoringResult` nodes + `implements` and `returns` edges
+- `docs/uml/class/models.md` — added `ScoringResult` diagram block
+- `docs/hld/go2-pipeline.md` — removed `*(RR-023)*` placeholder marker; extended Key Design Decisions with boundary-rule + stateless-engine notes
+
+**Design Decisions**
+- Boundary rule resolved to `>=` per CLAUDE.md (Independent ≥97, Instructional ≥91) — this overrides the SRS line-633 "ties go to lower" wording; CLAUDE.md is the canonical spec for this module and the test fixtures encode `>=`
+- `ScoringEngine` is per-request, not a startup singleton — no models, no I/O, no cached state; constructor takes no args; `get_scoring_engine()` returns a fresh instance per FastAPI call
+- Error set = `mispronunciation + substitution + omission + refusal_to_pronounce` — `insertion` and `repetition` are explicitly excluded per Phil-IRI (extra words and stutters don't penalize recognition %)
+- `_wpm` uses `total_passage_words / duration * 60` (not transcript word count) — matches SRS formula; reflects intended reading pace against the reference passage rather than rewarding insertions
+- Three edge cases collapse to `0.0`: empty transcript, `total_passage_words == 0`, and `duration <= 0` (single-word or out-of-order timestamps) — keeps `score()` total and avoids `ZeroDivisionError`
+- Thresholds as module-level `_PRIVATE` constants (not class attrs) — single source of truth, no risk of subclass override changing scoring semantics
+
+**Verification**
+- Pyright: `0 errors` (strict)
+- Tests: `9/9 passed` (`pytest tests/test_rr023.py`); 18/18 assertions
+- SOLID: ✓ — S: engine owns only score math; O: `ScoringEngineProtocol` allows alternative scorers; I: 1-method Protocol; D: `dependencies.py` returns the abstraction, concrete wired there
+- Docs: `lld/go2/scoring-engine.md`, `lld/models/scoring.md`, `uml/class/go2-classes.md` (updated), `uml/class/models.md` (updated), `hld/go2-pipeline.md` (updated)

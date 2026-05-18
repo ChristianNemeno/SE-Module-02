@@ -65,8 +65,26 @@ classDiagram
     MiscueClassifierProtocol --> MiscueCounts : returns
 ```
 
+## ScoringResult
+
+```mermaid
+classDiagram
+    class ScoringResult {
+        <<TypedDict>>
+        +wpm: float
+        +word_recognition_pct: float
+        +reading_level: ReadingLevel
+    }
+    class ScoringEngineProtocol {
+        <<Protocol>>
+        +score(transcript_words: list, miscue_counts: MiscueCounts, total_passage_words: int) ScoringResult
+    }
+    ScoringEngineProtocol --> ScoringResult : returns
+```
+
 ## Referenced by
 - LLD: `../../lld/models/assessment.md`
 - LLD: `../../lld/routers/analyze-controller.md`
 - LLD: `../../lld/models/transcription.md`
 - LLD: `../../lld/models/miscue.md`
+- LLD: `../../lld/models/scoring.md`
