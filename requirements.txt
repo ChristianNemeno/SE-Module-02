@@ -21,3 +21,6 @@ mediapipe
 
 # Storage
 supabase
+
+# Testing
+pytest
