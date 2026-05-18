@@ -5,11 +5,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers.analyze import AnalyzeController
+from app.services.go2.transcriber import load_models
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # RR-021: WhisperX model pre-load goes here (load_models())
+    """Loads WhisperX models sa startup — once ra, dili per request."""
+    load_models()
     yield
 
 
