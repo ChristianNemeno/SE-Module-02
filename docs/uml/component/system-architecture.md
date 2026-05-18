@@ -1,6 +1,6 @@
 # System Architecture — Component Diagram
 
-## Current (RR-004 Stub)
+## Current (RR-021 — WhisperX wired at startup)
 
 ```mermaid
 flowchart TD
@@ -9,9 +9,15 @@ flowchart TD
     subgraph FastAPI["FastAPI (port 8000)"]
         Controller[AnalyzeController]
         Config[Settings\npydantic-settings]
+        Deps[dependencies.py]
+    end
+
+    subgraph GO2["GO2 Pipeline (partial)"]
+        T[WhisperXTranscriber\nloaded at startup]
     end
 
     Controller -->|reads| Config
+    Deps -->|get_transcriber| T
     Controller -->|returns stub| Client
 ```
 
