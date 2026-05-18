@@ -18,7 +18,7 @@ report it as done. Never skip a step, even if the code looks obviously correct.
 ## The Loop
 
 ```
-GENERATE → SHOW → APPROVE → WRITE → PYRIGHT → SOLID-CHECK → if issues: FIX → repeat → DOCSTRINGS → DESIGN-DOCS → JOURNAL → REPORT
+GENERATE → SHOW → APPROVE → WRITE → PYRIGHT → SOLID-CHECK → if issues: FIX → repeat → DOCSTRINGS → DESIGN-DOCS → JOURNAL → REPORT → COMMIT?
 ```
 
 ### Step 1 — Generate
@@ -144,6 +144,16 @@ Once the loop exits cleanly, report:
 ```
 
 Show the final file content after the report.
+
+### Step 10 — Commit
+
+After the report, ask the user:
+
+> Ready to commit? Say **go** to commit with conventional messages, or skip.
+
+If the user says go (or any approval — "yes", "lgtm", "ship it"), invoke the
+`git-conventional-commit` skill to stage, group, and commit the changes.
+If they skip or say nothing, stop — never commit automatically.
 
 ## Shortcuts the Loop Allows
 
