@@ -31,6 +31,20 @@ classDiagram
     AssessmentResult --> ReadingLevel
 ```
 
+## WordSegment
+
+```mermaid
+classDiagram
+    class WordSegment {
+        <<TypedDict>>
+        +word: str
+        +start: float
+        +end: float
+        +score: float
+    }
+```
+
 ## Referenced by
 - LLD: `../../lld/models/assessment.md`
 - LLD: `../../lld/routers/analyze-controller.md`
+- LLD: `../../lld/models/transcription.md`
