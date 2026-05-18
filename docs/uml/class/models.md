@@ -44,7 +44,29 @@ classDiagram
     }
 ```
 
+## MiscueCounts
+
+```mermaid
+classDiagram
+    class MiscueCounts {
+        <<TypedDict>>
+        +correct: int
+        +mispronunciation: int
+        +substitution: int
+        +omission: int
+        +insertion: int
+        +repetition: int
+        +refusal_to_pronounce: int
+    }
+    class MiscueClassifierProtocol {
+        <<Protocol>>
+        +classify(transcript_words: list, passage_text: str) MiscueCounts
+    }
+    MiscueClassifierProtocol --> MiscueCounts : returns
+```
+
 ## Referenced by
 - LLD: `../../lld/models/assessment.md`
 - LLD: `../../lld/routers/analyze-controller.md`
 - LLD: `../../lld/models/transcription.md`
+- LLD: `../../lld/models/miscue.md`

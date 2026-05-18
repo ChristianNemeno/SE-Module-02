@@ -33,5 +33,5 @@ The GO2 pipeline processes a student's reading audio recording to produce ASR-ba
 | Class | LLD |
 |---|---|
 | `WhisperXTranscriber` | [lld/go2/transcriber.md](../lld/go2/transcriber.md) |
-| `MiscueClassifier` | lld/go2/miscue-classifier.md *(RR-022)* |
+| `MiscueClassifier` | [lld/go2/miscue-classifier.md](../lld/go2/miscue-classifier.md) |
 | `ScoringEngine` | lld/go2/scoring-engine.md *(RR-023)* |
