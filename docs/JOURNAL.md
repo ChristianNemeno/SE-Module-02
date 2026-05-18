@@ -50,3 +50,33 @@
 - Pyright: `0 errors` (strict)
 - SOLID: ✓ — S: one class one responsibility; O: new backends implement Protocol; I: 1-method Protocol; D: `dependencies.py` returns abstraction, concrete wired there only
 - Docs: `hld/go2-pipeline.md`, `lld/go2/transcriber.md`, `lld/models/transcription.md`, `uml/class/go2-classes.md`, `uml/sequence/go2-pipeline-flow.md`, `uml/class/models.md` (updated), `uml/component/system-architecture.md` (updated)
+
+---
+
+### 2026-05-18 · Iteration 3 — RR-022 Phil-IRI Miscue Classifier
+
+**Added**
+- `app/models/miscue.py` — `MiscueType` Literal alias, `MiscueCounts` TypedDict, `MiscueClassifierProtocol`
+- `app/services/go2/miscue_classifier.py` — `MiscueClassifier`; `_levenshtein()` module-level utility; SequenceMatcher-based alignment
+- `test_rr022.py` — 9 pytest unit tests covering all 7 categories + edge cases (empty transcript, repetition, all-correct)
+- `docs/lld/go2/miscue-classifier.md` — LLD for `MiscueClassifier`
+- `docs/lld/models/miscue.md` — LLD for `MiscueCounts` / `MiscueClassifierProtocol`
+
+**Changed**
+- `docs/uml/class/go2-classes.md` — added `MiscueClassifierProtocol`, `MiscueClassifier`, `MiscueCounts` nodes
+- `docs/uml/class/models.md` — added `MiscueCounts` diagram block
+- `docs/hld/go2-pipeline.md` — fixed placeholder link for `MiscueClassifier` LLD
+- `requirements.txt` — added `pytest`
+
+**Design Decisions**
+- `tally: dict[str, int]` internally, `MiscueCounts(...)` constructed at return — TypedDict doesn't allow variable-key indexing in pyright strict; plain dict does; explicit construction at the end makes all keys visible to the type checker
+- Repetitions detected and de-duplicated before SequenceMatcher alignment — a repeat would otherwise misalign the rest of the passage; de-duplication keeps the alignment clean
+- `autojunk=False` on SequenceMatcher — default junk heuristic skips "popular" tokens (e.g. "the", "and") in longer sequences; disabled to guarantee every passage word is aligned
+- `_levenshtein` as module-level function — pure, stateless; no reason to couple it to the class
+- Conservative boundary: `dist ≤ 3 → mispronunciation` (not `< 3`) — SRS line 559 prefers mispronunciation over substitution on ambiguous cases; dist=3 lands in mispronunciation
+
+**Verification**
+- Pyright: `0 errors` (strict)
+- Tests: `9/9 passed` (`pytest test_rr022.py`)
+- SOLID: ✓ — S: classifier owns only alignment+taxonomy logic; O: `MiscueClassifierProtocol` allows new classifiers; I: 1-method Protocol; D: concrete not yet wired (deferred to RR-020 `dependencies.py`)
+- Docs: `lld/go2/miscue-classifier.md`, `lld/models/miscue.md`, `uml/class/go2-classes.md` (updated), `uml/class/models.md` (updated), `hld/go2-pipeline.md` (updated)
