@@ -7,6 +7,10 @@ pydantic-settings
 python-dotenv
 
 # GO2 — ASR pipeline (heavy, install when ready)
+# NOTE: ffmpeg system binary required — install separately:
+#   Ubuntu/Debian: sudo apt-get install ffmpeg
+#   macOS:         brew install ffmpeg
+#   VM/Docker:     include in Dockerfile as RUN apt-get install -y ffmpeg
 whisperx
 librosa
 praat-parselmouth

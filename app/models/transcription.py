@@ -2,7 +2,7 @@ from typing import Protocol, TypedDict
 
 
 class WordSegment(TypedDict):
-    """Word-level output shape gikan sa WhisperX forced alignment."""
+    """Word-level output shape from WhisperX forced alignment."""
 
     word: str
     start: float
@@ -11,6 +11,6 @@ class WordSegment(TypedDict):
 
 
 class TranscriberProtocol(Protocol):
-    """Protocol interface para sa ASR transcribers — ang GO2 pipeline depende diri, dili sa concrete class."""
+    """Interface for ASR transcribers — pipeline depends on this, not the concrete class."""
 
     def transcribe(self, wav_path: str, passage_text: str) -> list[WordSegment]: ...

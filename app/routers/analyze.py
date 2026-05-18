@@ -5,7 +5,7 @@ from app.models.assessment import AssessmentResult
 
 
 class AnalyzeController:
-    """Handles HTTP para sa POST /analyze ug GET /health. Walay business logic diri."""
+    """Handles HTTP for POST /analyze and GET /health. No business logic here."""
 
     def __init__(self) -> None:
         self.router = APIRouter(tags=["analyze"])
@@ -23,7 +23,7 @@ class AnalyzeController:
         passage_id: str = Form(...),
         x_api_key: str = Header(..., alias="X-API-Key"),
     ) -> AssessmentResult:
-        """Accepts a video upload ug returns stub AssessmentResult. Mo-raise og 401 kung invalid ang key."""
+        """Accepts a video upload, validates API key, returns stub AssessmentResult. Raises 401 if key is wrong."""
         self._check_api_key(x_api_key)
         return AssessmentResult(
             wpm=85.5,
@@ -48,6 +48,6 @@ class AnalyzeController:
         return {"status": "ok"}
 
     def _check_api_key(self, key: str) -> None:
-        """Mo-raise og 401 kung dili match ang X-API-Key sa settings."""
+        """Raises 401 if X-API-Key doesn't match settings."""
         if key != get_settings().API_KEY:
             raise HTTPException(status_code=401, detail="Invalid API key")

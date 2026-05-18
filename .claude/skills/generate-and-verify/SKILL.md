@@ -79,10 +79,35 @@ Any "no" → fix the violation, return to Step 2.
 
 ### Step 6 — Docstrings
 
-Add Bislish docstrings to every class and public method in the file you just wrote.
-Follow `.claude/skills/bislish-docs/SKILL.md` — concise, natural mix, no restatement
-of types. Update the file in place (already approved, so no second approval needed for
-docs-only additions).
+Add a docstring to every class and public method in the file you just wrote.
+Update the file in place (already approved, no second approval needed for docs-only additions).
+
+**Style:** English, simplified tone, very concise — grammar can be sacrificed for brevity.
+Keep technical jargon (ASR, WPM, Protocol, etc.). Write like you're leaving a quick note,
+not formal documentation.
+
+Good examples:
+```python
+class WhisperXTranscriber:
+    """Holds pre-loaded WhisperX model refs and runs forced-alignment transcription."""
+
+def load(self) -> None:
+    """Loads the base model and alignment model into memory. Called once at startup."""
+
+def transcribe(self, wav_path: str, passage_text: str) -> list[WordSegment]:
+    """Runs ASR + forced alignment on a WAV file. Returns [] if no speech found."""
+
+def get_transcriber_instance() -> WhisperXTranscriber:
+    """Returns the singleton transcriber. Raises RuntimeError if not loaded yet."""
+
+class TranscriberProtocol(Protocol):
+    """Interface for ASR transcribers — pipeline depends on this, not the concrete class."""
+```
+
+Rules:
+- One line for simple methods, 2-3 lines max for complex ones
+- Don't restate the type annotations
+- Don't use Args:/Returns: sections
 
 ### Step 7 — Design Docs
 
