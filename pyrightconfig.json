@@ -1,8 +1,6 @@
 {
   "pythonVersion": "3.12",
   "pythonPlatform": "Linux",
-  "venvPath": ".",
-  "venv": ".venv",
   "typeCheckingMode": "strict",
   "reportMissingImports": true,
   "reportMissingTypeStubs": false

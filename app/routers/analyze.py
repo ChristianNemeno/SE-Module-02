@@ -5,7 +5,7 @@ from app.models.assessment import AssessmentResult
 
 
 class AnalyzeController:
-    """Handles HTTP for POST /analyze and GET /health. No business logic here."""
+    """Handles HTTP for POST /analyze only. No business logic."""
 
     def __init__(self) -> None:
         self.router = APIRouter(tags=["analyze"])
@@ -15,7 +15,6 @@ class AnalyzeController:
             methods=["POST"],
             response_model=AssessmentResult,
         )
-        self.router.add_api_route("/health", self.health, methods=["GET"])
 
     async def analyze(
         self,
@@ -42,10 +41,6 @@ class AnalyzeController:
             voice_too_soft=False,
             loses_place=False,
         )
-
-    async def health(self) -> dict[str, str]:
-        """Simple liveness check."""
-        return {"status": "ok"}
 
     def _check_api_key(self, key: str) -> None:
         """Raises 401 if X-API-Key doesn't match settings."""

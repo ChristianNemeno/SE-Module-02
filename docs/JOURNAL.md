@@ -4,6 +4,35 @@
 
 ---
 
+### 2026-05-19 · Iteration 5 — RR-045 Deployment Infrastructure
+
+**Added**
+- `app/routers/health.py` — `HealthController`; extracted from `AnalyzeController`; no auth, liveness probe only
+- `Dockerfile` — `python:3.12-slim`; installs ffmpeg; pre-downloads `large-v3` into HuggingFace cache at build time; `HEALTHCHECK` on `/health`
+- `.dockerignore` — excludes `.venv`, `.env`, `__pycache__`, `tests/`, `docs/`
+- `.github/workflows/deploy.yml` — 3-job CI/CD: pyright + pytest → GHCR push → SSH deploy to Droplet
+- `docs/deploy-plan.md` — full deployment plan and Droplet setup guide
+
+**Changed**
+- `app/config.py` — added `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `ALLOWED_ORIGINS: list[str]`
+- `app/main.py` — CORS origins now read from `settings.ALLOWED_ORIGINS`; wires in `HealthController`
+- `app/routers/analyze.py` — removed `/health` route and method (SRP fix); `AnalyzeController` now owns only `/analyze`
+- `.env.example` — replaced `SUPABASE_ANON_KEY` with `SUPABASE_SERVICE_KEY`; added `ALLOWED_ORIGINS`
+- `pyrightconfig.json` — removed `venvPath`/`venv` so pyright works in CI without `.venv`
+- `issues.md` — cleared completed GO2 issues; replaced with pointer to `CLAUDE.md`
+
+**Design Decisions**
+- GHCR over DO Container Registry — free, uses `GITHUB_TOKEN` in Actions (no extra secret for build/push), only needs a `GHCR_PAT` on the Droplet for pulls
+- `ALLOWED_ORIGINS: list[str]` defaulting to `["http://localhost:5173"]` — pydantic-settings parses JSON arrays natively; prod sets `["https://readright.app"]` in `/etc/readright/env`
+- `SUPABASE_SERVICE_KEY` defaults to `""` — making it required would break existing tests that don't set it; enforce non-empty once Supabase calls are wired in RR-020
+- Deploy step uses `envs:` in `appleboy/ssh-action` to pass `GHCR_PAT` — avoids interpolating secrets directly into shell `run:` blocks (security hook requirement)
+
+**Verification**
+- Pyright: `0 errors` (strict)
+- SOLID: ✓ `HealthController` extracted as SRP fix; `AnalyzeController` now single-responsibility
+
+---
+
 ### 2026-05-17 · Iteration 1 — RR-004 GO2 Scaffold + Stub `/analyze`
 
 **Added**
