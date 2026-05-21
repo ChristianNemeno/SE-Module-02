@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+.git/
+.github/
+tests/
+docs/
+*.md
+.pytest_cache/
+pyrightconfig.json
+pytest.ini
