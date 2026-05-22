@@ -1,9 +1,11 @@
 from app.models.cv_detector import CVDetectorProtocol
+from app.models.prosody_detector import ProsodyDetectorProtocol
 from app.models.scoring import ScoringEngineProtocol
 from app.models.transcription import TranscriberProtocol
 from app.services.go2.scoring_engine import ScoringEngine
 from app.services.go2.transcriber import get_transcriber_instance
 from app.services.go3.cv_detector import get_detector_instance
+from app.services.go3.prosody_detector import ProsodyAmplitudeDetector
 
 
 def get_transcriber() -> TranscriberProtocol:
@@ -19,3 +21,8 @@ def get_scoring_engine() -> ScoringEngineProtocol:
 def get_cv_detector() -> CVDetectorProtocol:
     """FastAPI dependency provider for CVDetectorProtocol — returns the singleton."""
     return get_detector_instance()
+
+
+def get_prosody_detector() -> ProsodyDetectorProtocol:
+    """FastAPI dependency provider for ProsodyDetectorProtocol — cheap, instantiated per call."""
+    return ProsodyAmplitudeDetector()
