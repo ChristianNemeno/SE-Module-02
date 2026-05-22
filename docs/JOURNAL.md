@@ -62,6 +62,31 @@
 
 ---
 
+### 2026-05-22 · Iteration 7 — REA-23 / RR-031 GO3 ProsodyAmplitudeDetector
+
+**Added**
+- `app/models/prosody_detector.py` — `ProsodyFlags` TypedDict + `ProsodyDetectorProtocol`; GO3 audio result shape and interface
+- `app/services/go3/prosody_detector.py` — `ProsodyAmplitudeDetector`; stateless; extracts `inaudible_reading` (RMS), `monotone_reading` (F0 std-dev), `word_by_word_reading` (IOI) from WAV
+- `docs/lld/go3/prosody-detector.md`, `docs/lld/models/prosody-detector.md` — LLD for new class + protocol
+
+**Changed**
+- `app/dependencies.py` — added `get_prosody_detector()` per-call provider (stateless, no singleton needed)
+- `docs/hld/go3-pipeline.md` — updated to include `ProsodyAmplitudeDetector` + new deps (librosa, parselmouth)
+- `docs/uml/class/go3-classes.md` — added `ProsodyDetectorProtocol`, `ProsodyAmplitudeDetector`, `ProsodyFlags`
+- `docs/uml/component/dependency-graph.md` — added `get_prosody_detector` edge
+
+**Design Decisions**
+- Per-call instantiation (like `ScoringEngine`) instead of singleton — `ProsodyAmplitudeDetector` holds no model state; librosa/parselmouth load lazily per call; singleton overhead unnecessary
+- `parselmouth` calls isolated with `# type: ignore[no-untyped-call]` + `Any` annotation — library has no stubs; same pattern as mediapipe in `cv_detector.py`
+- Audio < 5s returns all-False immediately — too short for reliable F0/onset analysis; avoids divide-by-zero and false positives on near-silent clips
+
+**Verification**
+- Pyright: `0 errors` (strict)
+- SOLID: ✓ single responsibility (audio prosody flags only); `ProsodyDetectorProtocol` narrow (1 method); concrete wired only in `dependencies.py`
+- Docs: `hld/go3-pipeline.md`, `lld/go3/prosody-detector.md`, `lld/models/prosody-detector.md`, `uml/class/go3-classes.md`, `uml/component/dependency-graph.md`
+
+---
+
 ### 2026-05-17 · Iteration 1 — RR-004 GO2 Scaffold + Stub `/analyze`
 
 **Added**
