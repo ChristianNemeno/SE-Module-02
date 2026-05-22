@@ -33,6 +33,35 @@
 
 ---
 
+### 2026-05-22 · Iteration 6 — REA-22 / RR-030 GO3 CVDetector (MediaPipe)
+
+**Added**
+- `app/models/cv_detector.py` — `CVFlags` TypedDict + `CVDetectorProtocol`; GO3 result shape and interface
+- `app/services/go3/cv_detector.py` — `CVDetector` singleton; loads HandLandmarker + FaceLandmarker; samples every 5th frame; 120s timeout; always returns valid dict
+- `tests/test_rr030.py` — 5 tests: 2 real-clip (skip until fixture videos provided), 3 generated-edge-case (blank video, 1-frame, timeout monkeypatch)
+- `docs/hld/go3-pipeline.md`, `docs/lld/go3/cv-detector.md`, `docs/lld/models/cv-detector.md` — GO3 domain docs
+- `docs/uml/class/go3-classes.md`, `docs/uml/component/dependency-graph.md` — new UML diagrams
+
+**Changed**
+- `app/main.py` — lifespan now calls `load_cv_models()` alongside `load_models()` (aliased import)
+- `app/dependencies.py` — added `get_cv_detector()` provider returning `CVDetectorProtocol` singleton
+- `docs/uml/component/system-architecture.md` — added REA-22 current-state diagram (GO2 ✓, GO3 partial)
+- `.gitignore` — added `app/services/go3/models/` (downloaded .task bundles, not committed)
+
+**Design Decisions**
+- MediaPipe Tasks API instead of legacy `mp.solutions` — `mp.solutions` was removed in mediapipe 0.10.30+; Tasks API (HandLandmarker + FaceLandmarker) is the current stable surface and supports numpy 2
+- Download .task bundles at `load()` rather than committing them — keeps repo light (~11 MB); cached after first run; aligns with how the app will run in prod (Docker build can pre-download)
+- Module-scoped pytest fixture for CVDetector — deviation from GO2's function-scoped convention; load() is expensive (model init + file I/O) so one fixture per module is correct here
+- `_TIMEOUT_SECONDS` as a module-level constant (not a default arg) — required so monkeypatch can override it in `test_timeout_returns_defaults`
+
+**Verification**
+- Pyright: `0 errors` (strict, `pyright app/`)
+- Tests: `21 passed, 2 skipped` — real-clip tests skip cleanly until fixture videos added
+- SOLID: ✓ CVDetector single-responsibility (inference only); CVDetectorProtocol narrow (1 method); concrete wired only in `dependencies.py`
+- Docs: `hld/go3-pipeline.md`, `lld/go3/cv-detector.md`, `lld/models/cv-detector.md`, `uml/class/go3-classes.md`, `uml/component/dependency-graph.md`, `uml/component/system-architecture.md`
+
+---
+
 ### 2026-05-17 · Iteration 1 — RR-004 GO2 Scaffold + Stub `/analyze`
 
 **Added**
