@@ -10,3 +10,4 @@ __pycache__/
 
 # Test artifacts
 test_rr021.py
+.mcp.json
