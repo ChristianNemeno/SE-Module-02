@@ -8,12 +8,14 @@ from app.config import get_settings
 from app.routers.analyze import AnalyzeController
 from app.routers.health import HealthController
 from app.services.go2.transcriber import load_models
+from app.services.go3.cv_detector import load_models as load_cv_models
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Loads WhisperX models at startup — once, not per request."""
+    """Loads WhisperX + MediaPipe models at startup — once, not per request."""
     load_models()
+    load_cv_models()
     yield
 
 
