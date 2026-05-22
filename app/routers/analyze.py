@@ -36,10 +36,10 @@ class AnalyzeController:
             repetition=0,
             refusal_to_pronounce=0,
             finger_pointing=False,
-            lip_movement=False,
-            head_movement=False,
-            voice_too_soft=False,
-            loses_place=False,
+            loss_of_place=False,
+            monotone_reading=False,
+            word_by_word_reading=False,
+            inaudible_reading=False,
         )
 
     def _check_api_key(self, key: str) -> None:
