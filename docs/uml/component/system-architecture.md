@@ -86,5 +86,38 @@ flowchart TD
     Controller --> Client
 ```
 
+## Current (REA-24 — ResultConsolidator implemented)
+
+```mermaid
+flowchart TD
+    Client([Client\nAndroid / iOS]) -->|POST /analyze\nX-API-Key| Controller
+
+    subgraph FastAPI["FastAPI (port 8000)"]
+        Controller[AnalyzeController\nstub]
+        Deps[dependencies.py]
+        RC[ResultConsolidator\nmerge + validate]
+    end
+
+    subgraph GO2["GO2 Pipeline ✓"]
+        T[WhisperXTranscriber]
+        C[MiscueClassifier]
+        S[ScoringEngine]
+    end
+
+    subgraph GO3["GO3 Pipeline ✓"]
+        CV[CVDetector]
+        PA[ProsodyAmplitudeDetector]
+    end
+
+    Deps -->|get_transcriber| T
+    Deps -->|get_scoring_engine| S
+    Deps -->|get_cv_detector| CV
+    Deps -->|get_prosody_detector| PA
+    GO2 --> RC
+    GO3 --> RC
+    RC -->|AssessmentResult| Controller
+    Controller -->|stub for now| Client
+```
+
 ## Referenced by
 - HLD: `../../hld/system-overview.md`

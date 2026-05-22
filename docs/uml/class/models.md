@@ -17,10 +17,10 @@ classDiagram
         +repetition: int
         +refusal_to_pronounce: int
         +finger_pointing: bool
-        +lip_movement: bool
-        +head_movement: bool
-        +voice_too_soft: bool
-        +loses_place: bool
+        +loss_of_place: bool
+        +monotone_reading: bool
+        +word_by_word_reading: bool
+        +inaudible_reading: bool
     }
     class ReadingLevel {
         <<Literal>>
@@ -29,6 +29,16 @@ classDiagram
         Independent
     }
     AssessmentResult --> ReadingLevel
+```
+
+## ResultConsolidator
+
+```mermaid
+classDiagram
+    class ResultConsolidator {
+        +merge(go2_result: dict, go3_result: dict)$ AssessmentResult
+    }
+    ResultConsolidator --> AssessmentResult : produces
 ```
 
 ## WordSegment
@@ -84,6 +94,7 @@ classDiagram
 
 ## Referenced by
 - LLD: `../../lld/models/assessment.md`
+- LLD: `../../lld/utils/result-consolidator.md`
 - LLD: `../../lld/routers/analyze-controller.md`
 - LLD: `../../lld/models/transcription.md`
 - LLD: `../../lld/models/miscue.md`
