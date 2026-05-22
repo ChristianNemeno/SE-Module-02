@@ -6,7 +6,7 @@ type ReadingLevel = Literal["Frustration", "Instructional", "Independent"]
 
 
 class AssessmentResult(BaseModel):
-    """Fully typed result sa GO2 + GO3 pipeline. Mao ni ang schema nga gi-return sa /analyze."""
+    """Fully typed result from GO2 + GO3 pipeline. Schema returned by /analyze."""
 
     # GO2 — audio scoring
     wpm: float
@@ -22,7 +22,7 @@ class AssessmentResult(BaseModel):
 
     # GO3 — behavioral flags
     finger_pointing: bool
-    lip_movement: bool
-    head_movement: bool
-    voice_too_soft: bool
-    loses_place: bool
+    loss_of_place: bool
+    monotone_reading: bool
+    word_by_word_reading: bool
+    inaudible_reading: bool
