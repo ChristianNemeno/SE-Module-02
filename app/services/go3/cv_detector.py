@@ -18,6 +18,7 @@ _TEXT_REGION_MIN_Y = 0.33
 _TEXT_REGION_MIN_X = 0.25
 _TEXT_REGION_MAX_X = 0.75
 _FINGER_POINTING_FRAME_RATIO = 0.20
+_MIN_HAND_VISIBLE_FRAMES = 10
 _GAZE_SHIFT_DELTA = 0.15
 _GAZE_SHIFT_COUNT_THRESHOLD = 3
 _MIN_DETECTION_CONFIDENCE = 0.5
@@ -108,7 +109,7 @@ class CVDetector:
             return _default_flags()
         return {
             "finger_pointing": (
-                hand_visible_frames > 0
+                hand_visible_frames >= _MIN_HAND_VISIBLE_FRAMES
                 and pointing_frames / hand_visible_frames >= _FINGER_POINTING_FRAME_RATIO
             ),
             "loss_of_place": gaze_shifts >= _GAZE_SHIFT_COUNT_THRESHOLD,
