@@ -1,8 +1,7 @@
 # `AssessmentResult` — Low-Level Design
 
 ## Responsibility
-Pydantic model nga gi-return sa `/analyze`. Holds all 15 fields (10 GO2 + 5 GO3).
-Walay logic — data shape ra ni.
+Pydantic model returned by `/analyze`. Holds all 15 fields (10 GO2 + 5 GO3). No logic — data shape only.
 
 ## Implements
 N/A — pure Pydantic `BaseModel`.
@@ -14,7 +13,11 @@ N/A — pure Pydantic `BaseModel`.
 | `word_recognition_pct` | `float` | `ge=0, le=100` | GO2 |
 | `reading_level` | `Literal[...]` | One of 3 exact strings | GO2 |
 | `correct` … `refusal_to_pronounce` | `int` | — | GO2 (7 miscue counts) |
-| `finger_pointing` … `loses_place` | `bool` | — | GO3 (5 behavioral flags) |
+| `finger_pointing` | `bool` | — | GO3 (CVDetector) |
+| `loss_of_place` | `bool` | — | GO3 (CVDetector) |
+| `monotone_reading` | `bool` | — | GO3 (ProsodyAmplitudeDetector) |
+| `word_by_word_reading` | `bool` | — | GO3 (ProsodyAmplitudeDetector) |
+| `inaudible_reading` | `bool` | — | GO3 (ProsodyAmplitudeDetector) |
 
 ## Edge Cases
 - `reading_level` must be exactly `"Frustration"`, `"Instructional"`, or `"Independent"` — Pydantic rejects all others

@@ -87,6 +87,33 @@
 
 ---
 
+### 2026-05-22 · Iteration 8 — REA-24 / RR-032 ResultConsolidator
+
+**Added**
+- `app/utils/result_consolidator.py` — `ResultConsolidator.merge()` implemented; validates all 15 required fields are present and non-`None`; returns `AssessmentResult.model_validate(merged)` for Pydantic type safety
+- `tests/test_rr032.py` — 3 tests: valid merge → `AssessmentResult`, missing field → `ValueError`, `None` field → `ValueError`
+- `docs/lld/utils/result-consolidator.md` — LLD for `ResultConsolidator`
+
+**Changed**
+- `app/models/assessment.py` — replaced stale GO3 fields (`lip_movement`, `head_movement`, `voice_too_soft`, `loses_place`) with the correct fields matching actual detector outputs: `loss_of_place`, `monotone_reading`, `word_by_word_reading`, `inaudible_reading`
+- `app/routers/analyze.py` — stub `AssessmentResult(...)` updated to use corrected GO3 field names
+- `docs/lld/models/assessment.md` — updated field table to reflect correct GO3 fields with source (CVDetector vs ProsodyAmplitudeDetector)
+- `docs/uml/class/models.md` — updated `AssessmentResult` class diagram; added `ResultConsolidator` block
+- `docs/uml/component/system-architecture.md` — added REA-24 current-state diagram showing `ResultConsolidator` wired between GO2/GO3 and controller
+
+**Design Decisions**
+- `@staticmethod` on `merge` — no instance state; avoids forcing caller to instantiate `ResultConsolidator` just to call the one method
+- `AssessmentResult.model_validate(merged)` over `AssessmentResult(**merged)` — `model_validate` accepts `Any`, avoiding pyright strict complaints about unpacking `dict[str, Any]` into a typed constructor
+- Pre-validation before `model_validate` — catches missing/`None` fields with a clear `ValueError` message before Pydantic's own `ValidationError` fires; consistent with Linear issue spec
+
+**Verification**
+- Pyright: `0 errors` (strict)
+- Tests: `3/3 passed` (`pytest tests/test_rr032.py`)
+- SOLID: ✓ — S: `ResultConsolidator` owns only merge + validation; no GO2/GO3 coupling; D: depends on `AssessmentResult` model, not on any concrete service
+- Docs: `lld/utils/result-consolidator.md`, `lld/models/assessment.md` (updated), `uml/class/models.md` (updated), `uml/component/system-architecture.md` (updated)
+
+---
+
 ### 2026-05-17 · Iteration 1 — RR-004 GO2 Scaffold + Stub `/analyze`
 
 **Added**
