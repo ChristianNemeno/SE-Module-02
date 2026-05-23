@@ -153,17 +153,22 @@ flowchart TD
 
     Deps -->|injects| Orchestrator
     Controller -->|Depends| Orchestrator
+    RC -->|AssessmentResult| Orchestrator
+
     Orchestrator -->|asyncio.to_thread| ME[MediaExtractor\nffmpeg]
     Orchestrator -->|asyncio.gather| GO2P
     Orchestrator -->|asyncio.gather| GO3P
+
     GO2P --> T & C & S
     GO2P --> PR --> PT
     GO3P --> CV & PA
-    GO2P & GO3P --> RC
-    RC --> Orchestrator
+
+    GO2P -.->|results| RC
+    GO3P -.->|results| RC
+
     Orchestrator -->|asyncio.to_thread| SR[SessionRepository]
     SR --> ST
-    Orchestrator --> Controller
+    Orchestrator -->|AssessmentResult| Controller
     Controller --> Client
 ```
 
