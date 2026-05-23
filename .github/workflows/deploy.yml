@@ -19,6 +19,9 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      - name: Install system dependencies
+        run: apt-get update && apt-get install -y libgles2
+
       - name: Install dependencies
         run: pip install -r requirements.txt pyright
 
@@ -28,7 +31,7 @@ jobs:
       - name: Pytest
         run: pytest
         env:
-          API_KEY: test-key-for-ci
+          API_KEY: test-api-key
 
   build-and-push:
     name: Build & Push Image
