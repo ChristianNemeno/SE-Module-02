@@ -114,6 +114,47 @@
 
 ---
 
+### 2026-05-23 · Iteration 9 — REA-18 / RR-020 Real `/analyze` Orchestrator
+
+**Added**
+- `app/models/passage.py` — `PassageRecord` TypedDict + `PassageRepositoryProtocol`; passage fetch contract
+- `app/models/session.py` — `SessionRecord` TypedDict (17 fields) + `SessionRepositoryProtocol`; session persistence contract
+- `app/models/media_extractor.py` — `ExtractionResult` TypedDict + `MediaExtractorProtocol`; ffmpeg extraction contract
+- `app/models/pipeline_results.py` — `GO2Result` (10 fields) + `GO3Result` (5 bool fields); internal pipeline output shapes
+- `app/services/db/__init__.py` — empty package marker
+- `app/services/db/supabase_client.py` — module-level `_client` singleton; `init_supabase_client()` + `get_supabase_client()`; no-op if creds blank
+- `app/services/db/passage_repository.py` — `PassageRepository.fetch()`; SELECT from `passages` table; raises `ValueError` on missing row
+- `app/services/db/session_repository.py` — `SessionRepository.insert()`; INSERT into `sessions` table; lets `APIError` propagate
+- `app/services/media_extractor.py` — `MediaExtractor.extract()`; two `subprocess.run` ffmpeg calls → WAV (16kHz mono) + MP4 (libx264); raises `RuntimeError` on `CalledProcessError`
+- `app/services/go2/pipeline.py` — `GO2Pipeline.run()`; chains `passage_repo.fetch → transcribe → classify → score → GO2Result`
+- `app/services/go3/pipeline.py` — `GO3Pipeline.run()`; chains `cv_detector.detect + prosody_detector.detect → GO3Result`
+- `app/services/analysis_orchestrator.py` — `AnalysisOrchestrator.run()`; full async pipeline: temp file → extract → `asyncio.gather(GO2, GO3)` → `ResultConsolidator.merge` → optional DB insert
+- `tests/conftest.py` — seeds `API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` before any app import
+- `tests/test_rr020.py` — 8 integration tests covering: 200+all-16-fields, 401 bad key, 422 missing field, 500 ffmpeg, 200+db_save_failed, learner_id skip, learner_id passthrough, webm+mp4 both accepted
+
+**Changed**
+- `app/config.py` — added `extra="ignore"` to `model_config` so test imports survive without full `.env`
+- `app/models/assessment.py` — added `db_save_failed: bool = False` (16th field)
+- `app/dependencies.py` — added 6 new providers: `get_passage_repository`, `get_session_repository`, `get_media_extractor`, `get_go2_pipeline`, `get_go3_pipeline`, `get_analysis_orchestrator`
+- `app/main.py` — lifespan now calls `asyncio.to_thread(init_supabase_client)`; added module-level `_pipeline_error_handler` that unwraps `{"error", "code"}` dict from HTTPException detail
+- `app/routers/analyze.py` — replaced stub; real `AnalysisOrchestrator` injected via `Depends`; accepts optional `learner_id: str = Form("")`
+- `tests/test_rr032.py` — `len(result.model_dump()) == 15` → `== 16`
+
+**Design Decisions**
+- Skip DB insert in orchestrator (not repository) when `learner_id` blank — ensures both real and fake repos are bypassed in tests; avoids leaking policy into the persistence layer
+- `db_save_failed=True` → HTTP 200 (not 500) — DB unavailability is non-fatal; learner still gets results; frontend retries persist on reconnect
+- `_pipeline_error_handler` at module level (not nested in `create_app`) — avoids pyright `reportUnusedFunction` on a nested function referenced only by a decorator call
+- `ExtractionResult` as `TypedDict` (not `dataclass`) — accessed by `dict` key downstream in `asyncio.gather` unpacking; TypedDict is the right shape for key-subscript access patterns
+- `asyncio.to_thread` for all blocking calls — keeps the event loop free; ffmpeg, WhisperX, MediaPipe, and Supabase are all blocking/sync
+
+**Verification**
+- Pyright: `0 errors` (strict, `pyright app/`)
+- Tests: `34/34 passed` (`pytest tests/test_rr020.py tests/test_rr022.py tests/test_rr023.py tests/test_rr030.py tests/test_rr032.py`)
+- SOLID: ✓ — S: `AnalysisOrchestrator` orchestrates only; `MediaExtractor` extracts only; each repo persists one entity; O: all injected via Protocols; D: concretes wired only in `dependencies.py`
+- Docs: `hld/api-layer.md` (updated), `lld/go2/go2-pipeline.md`, `lld/go3/go3-pipeline.md`, `lld/services/analysis-orchestrator.md`, `lld/services/media-extractor.md`, `lld/repositories/passage-repository.md`, `lld/repositories/session-repository.md`, `lld/models/passage.md`, `lld/models/session.md`, `lld/models/media-extractor-model.md`, `lld/models/pipeline-results.md`, `uml/class/models.md` (updated), `uml/class/go2-classes.md` (updated), `uml/class/go3-classes.md` (updated), `uml/class/orchestrator-classes.md`, `uml/sequence/analyze-flow.md` (updated), `uml/sequence/go3-pipeline-flow.md`, `uml/component/system-architecture.md` (updated), `uml/component/dependency-graph.md` (updated)
+
+---
+
 ### 2026-05-17 · Iteration 1 — RR-004 GO2 Scaffold + Stub `/analyze`
 
 **Added**

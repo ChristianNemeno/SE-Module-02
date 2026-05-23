@@ -1,6 +1,6 @@
 # Models — Class Diagram
 
-## AssessmentResult
+## AssessmentResult (updated — RR-020)
 
 ```mermaid
 classDiagram
@@ -21,6 +21,7 @@ classDiagram
         +monotone_reading: bool
         +word_by_word_reading: bool
         +inaudible_reading: bool
+        +db_save_failed: bool
     }
     class ReadingLevel {
         <<Literal>>
@@ -92,6 +93,96 @@ classDiagram
     ScoringEngineProtocol --> ScoringResult : returns
 ```
 
+## PassageRecord + PassageRepositoryProtocol
+
+```mermaid
+classDiagram
+    class PassageRecord {
+        <<TypedDict>>
+        +text: str
+        +word_count: int
+    }
+    class PassageRepositoryProtocol {
+        <<Protocol>>
+        +fetch(passage_id: str) PassageRecord
+    }
+    PassageRepositoryProtocol --> PassageRecord : returns
+```
+
+## SessionRecord + SessionRepositoryProtocol
+
+```mermaid
+classDiagram
+    class SessionRecord {
+        <<TypedDict>>
+        +learner_id: str
+        +passage_id: str
+        +wpm: float
+        +word_recognition_pct: float
+        +reading_level: str
+        +correct: int
+        +mispronunciation: int
+        +substitution: int
+        +omission: int
+        +insertion: int
+        +repetition: int
+        +refusal_to_pronounce: int
+        +finger_pointing: bool
+        +loss_of_place: bool
+        +monotone_reading: bool
+        +word_by_word_reading: bool
+        +inaudible_reading: bool
+    }
+    class SessionRepositoryProtocol {
+        <<Protocol>>
+        +insert(record: SessionRecord) None
+    }
+    SessionRepositoryProtocol --> SessionRecord : accepts
+```
+
+## ExtractionResult + MediaExtractorProtocol
+
+```mermaid
+classDiagram
+    class ExtractionResult {
+        <<TypedDict>>
+        +wav_path: str
+        +mp4_path: str
+    }
+    class MediaExtractorProtocol {
+        <<Protocol>>
+        +extract(source_path: str, out_dir: str) ExtractionResult
+    }
+    MediaExtractorProtocol --> ExtractionResult : returns
+```
+
+## GO2Result + GO3Result
+
+```mermaid
+classDiagram
+    class GO2Result {
+        <<TypedDict>>
+        +wpm: float
+        +word_recognition_pct: float
+        +reading_level: str
+        +correct: int
+        +mispronunciation: int
+        +substitution: int
+        +omission: int
+        +insertion: int
+        +repetition: int
+        +refusal_to_pronounce: int
+    }
+    class GO3Result {
+        <<TypedDict>>
+        +finger_pointing: bool
+        +loss_of_place: bool
+        +monotone_reading: bool
+        +word_by_word_reading: bool
+        +inaudible_reading: bool
+    }
+```
+
 ## Referenced by
 - LLD: `../../lld/models/assessment.md`
 - LLD: `../../lld/utils/result-consolidator.md`
@@ -99,3 +190,7 @@ classDiagram
 - LLD: `../../lld/models/transcription.md`
 - LLD: `../../lld/models/miscue.md`
 - LLD: `../../lld/models/scoring.md`
+- LLD: `../../lld/models/passage.md`
+- LLD: `../../lld/models/session.md`
+- LLD: `../../lld/models/media-extractor-model.md`
+- LLD: `../../lld/models/pipeline-results.md`

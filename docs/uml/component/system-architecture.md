@@ -119,5 +119,53 @@ flowchart TD
     Controller -->|stub for now| Client
 ```
 
+## Current (RR-020 — fully wired)
+
+```mermaid
+flowchart TD
+    Client([Client\nAndroid / iOS]) -->|POST /analyze\nmultipart/form-data| Controller
+
+    subgraph FastAPI["FastAPI (port 8000)"]
+        Controller[AnalyzeController]
+        Orchestrator[AnalysisOrchestrator]
+        Deps[dependencies.py]
+        RC[ResultConsolidator]
+    end
+
+    subgraph GO2["GO2 Pipeline"]
+        GO2P[GO2Pipeline]
+        T[WhisperXTranscriber]
+        C[MiscueClassifier]
+        S[ScoringEngine]
+        PR[PassageRepository]
+    end
+
+    subgraph GO3["GO3 Pipeline"]
+        GO3P[GO3Pipeline]
+        CV[CVDetector]
+        PA[ProsodyAmplitudeDetector]
+    end
+
+    subgraph DB["Supabase (lfawzhhtqfiwsfonzfbu)"]
+        PT[(passages table)]
+        ST[(sessions table)]
+    end
+
+    Deps -->|injects| Orchestrator
+    Controller -->|Depends| Orchestrator
+    Orchestrator -->|asyncio.to_thread| ME[MediaExtractor\nffmpeg]
+    Orchestrator -->|asyncio.gather| GO2P
+    Orchestrator -->|asyncio.gather| GO3P
+    GO2P --> T & C & S
+    GO2P --> PR --> PT
+    GO3P --> CV & PA
+    GO2P & GO3P --> RC
+    RC --> Orchestrator
+    Orchestrator -->|asyncio.to_thread| SR[SessionRepository]
+    SR --> ST
+    Orchestrator --> Controller
+    Controller --> Client
+```
+
 ## Referenced by
 - HLD: `../../hld/system-overview.md`
