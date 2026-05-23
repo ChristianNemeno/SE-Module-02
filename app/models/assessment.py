@@ -26,3 +26,6 @@ class AssessmentResult(BaseModel):
     monotone_reading: bool
     word_by_word_reading: bool
     inaudible_reading: bool
+
+    # API metadata
+    db_save_failed: bool = False
