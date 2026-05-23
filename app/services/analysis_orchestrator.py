@@ -1,0 +1,128 @@
+import asyncio
+import os
+import shutil
+import tempfile
+
+from fastapi import HTTPException
+
+from app.models.assessment import AssessmentResult
+from app.models.media_extractor import MediaExtractorProtocol
+from app.models.session import SessionRecord, SessionRepositoryProtocol
+from app.services.go2.pipeline import GO2Pipeline
+from app.services.go3.pipeline import GO3Pipeline
+from app.utils.result_consolidator import ResultConsolidator
+
+
+class AnalysisOrchestrator:
+    """Async coordinator: save temp file → extract media → run GO2+GO3 in parallel → merge → DB insert."""
+
+    def __init__(
+        self,
+        extractor: MediaExtractorProtocol,
+        go2_pipeline: GO2Pipeline,
+        go3_pipeline: GO3Pipeline,
+        session_repo: SessionRepositoryProtocol,
+    ) -> None:
+        """Inject all orchestration dependencies."""
+        self._extractor = extractor
+        self._go2 = go2_pipeline
+        self._go3 = go3_pipeline
+        self._session_repo = session_repo
+
+    async def run(
+        self,
+        upload_bytes: bytes,
+        source_filename: str,
+        passage_id: str,
+        learner_id: str,
+    ) -> AssessmentResult:
+        """
+        Full pipeline: write upload → extract → GO2+GO3 in parallel → consolidate → DB insert.
+        Returns AssessmentResult with db_save_failed=True if the session INSERT fails.
+        Raises HTTPException(500) with code PIPELINE_FAILED if GO2/GO3/extraction fails.
+        """
+        temp_dir = tempfile.mkdtemp()
+        try:
+            return await self._execute(
+                upload_bytes, source_filename, passage_id, learner_id, temp_dir
+            )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    async def _execute(
+        self,
+        upload_bytes: bytes,
+        source_filename: str,
+        passage_id: str,
+        learner_id: str,
+        temp_dir: str,
+    ) -> AssessmentResult:
+        """Inner pipeline logic — runs inside the temp_dir try/finally."""
+        ext = os.path.splitext(source_filename)[-1] or ".webm"
+        source_path = os.path.join(temp_dir, f"upload{ext}")
+        with open(source_path, "wb") as f:
+            f.write(upload_bytes)
+
+        # Extract WAV + MP4
+        try:
+            extraction = await asyncio.to_thread(
+                self._extractor.extract, source_path, temp_dir
+            )
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail={"error": str(exc), "code": "PIPELINE_FAILED"},
+            ) from exc
+
+        # Run GO2 + GO3 in parallel (both are blocking — run in thread pool)
+        try:
+            go2_result, go3_result = await asyncio.gather(
+                asyncio.to_thread(self._go2.run, extraction["wav_path"], passage_id),
+                asyncio.to_thread(self._go3.run, extraction["mp4_path"], extraction["wav_path"]),
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail={"error": str(exc), "code": "PIPELINE_FAILED"},
+            ) from exc
+
+        # Merge + validate
+        try:
+            result = ResultConsolidator.merge(dict(go2_result), dict(go3_result))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail={"error": str(exc), "code": "PIPELINE_FAILED"},
+            ) from exc
+
+        # Skip DB insert when no learner identity is available
+        if not learner_id.strip():
+            return result
+
+        # Persist session — failure is non-fatal; learner still gets their results
+        db_save_failed = False
+        record = SessionRecord(
+            learner_id=learner_id,
+            passage_id=passage_id,
+            wpm=result.wpm,
+            word_recognition_pct=result.word_recognition_pct,
+            reading_level=result.reading_level,
+            correct=result.correct,
+            mispronunciation=result.mispronunciation,
+            substitution=result.substitution,
+            omission=result.omission,
+            insertion=result.insertion,
+            repetition=result.repetition,
+            refusal_to_pronounce=result.refusal_to_pronounce,
+            finger_pointing=result.finger_pointing,
+            loss_of_place=result.loss_of_place,
+            monotone_reading=result.monotone_reading,
+            word_by_word_reading=result.word_by_word_reading,
+            inaudible_reading=result.inaudible_reading,
+        )
+        try:
+            await asyncio.to_thread(self._session_repo.insert, record)
+        except Exception:
+            db_save_failed = True
+
+        return result.model_copy(update={"db_save_failed": db_save_failed})
