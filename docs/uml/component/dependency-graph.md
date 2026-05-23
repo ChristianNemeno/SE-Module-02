@@ -4,22 +4,23 @@
 flowchart LR
     deps[dependencies.py]
 
-    deps -->|get_transcriber singleton| T[WhisperXTranscriber]
-    deps -->|get_scoring_engine per-call| S[ScoringEngine]
-    deps -->|get_cv_detector singleton| CV[CVDetector]
-    deps -->|get_prosody_detector per-call| PA[ProsodyAmplitudeDetector]
+    deps -->|singleton| T[WhisperXTranscriber]
+    deps -->|per-call| C[MiscueClassifier]
+    deps -->|per-call| S[ScoringEngine]
+    deps -->|singleton| CV[CVDetector]
+    deps -->|per-call| PA[ProsodyAmplitudeDetector]
+    deps -->|per-call| ME[MediaExtractor]
+    deps -->|per-call| PR[PassageRepository\nclient]
+    deps -->|per-call| SR[SessionRepository\nclient]
 
-    T --> Proto1[TranscriberProtocol]
-    S --> Proto2[ScoringEngineProtocol]
-    CV --> Proto3[CVDetectorProtocol]
-    PA --> Proto4[ProsodyDetectorProtocol]
+    deps -->|constructs| GO2[GO2Pipeline\nT + C + S + PR]
+    deps -->|constructs| GO3[GO3Pipeline\nCV + PA]
+    deps -->|constructs| ORC[AnalysisOrchestrator\nME + GO2 + GO3 + SR]
 
-    Proto1 -->|Depends - future REA-18| Ctrl[AnalyzeController]
-    Proto2 -->|Depends - future REA-18| Ctrl
-    Proto3 -->|Depends - future REA-18| Ctrl
-    Proto4 -->|Depends - future REA-18| Ctrl
+    ORC -->|Depends| Ctrl[AnalyzeController\nPOST /analyze]
 ```
 
 ## Referenced by
 - HLD: `../../hld/go2-pipeline.md`
 - HLD: `../../hld/go3-pipeline.md`
+- HLD: `../../hld/api-layer.md`

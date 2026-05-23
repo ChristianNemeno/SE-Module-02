@@ -41,9 +41,32 @@ classDiagram
     ProsodyAmplitudeDetector --> ProsodyFlags : returns
 ```
 
+## GO3Pipeline
+
+```mermaid
+classDiagram
+    class GO3Pipeline {
+        -_cv_detector: CVDetectorProtocol
+        -_prosody_detector: ProsodyDetectorProtocol
+        +run(mp4_path: str, wav_path: str) GO3Result
+    }
+    class GO3Result {
+        <<TypedDict>>
+        +finger_pointing: bool
+        +loss_of_place: bool
+        +monotone_reading: bool
+        +word_by_word_reading: bool
+        +inaudible_reading: bool
+    }
+    GO3Pipeline --> CVDetectorProtocol : uses
+    GO3Pipeline --> ProsodyDetectorProtocol : uses
+    GO3Pipeline --> GO3Result : returns
+```
+
 ## Referenced by
 - HLD: `../../hld/go3-pipeline.md`
 - LLD: `../../lld/go3/cv-detector.md`
 - LLD: `../../lld/models/cv-detector.md`
 - LLD: `../../lld/go3/prosody-detector.md`
 - LLD: `../../lld/models/prosody-detector.md`
+- LLD: `../../lld/go3/go3-pipeline.md`

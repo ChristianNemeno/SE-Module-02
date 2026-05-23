@@ -38,7 +38,7 @@ def test_valid_merge_returns_assessment_result() -> None:
     assert result.wpm == 80.0
     assert result.reading_level == "Instructional"
     assert result.loss_of_place is True
-    assert len(result.model_dump()) == 15
+    assert len(result.model_dump()) == 16
 
 
 def test_missing_field_raises_value_error() -> None:
