@@ -8,6 +8,11 @@ def _w(word: str, start: float, end: float, score: float = 0.9) -> WordSegment:
     return WordSegment(word=word, start=start, end=end, score=score)
 
 
+def _approx(value: float, expected: float, tol: float = 0.01) -> bool:
+    """True when value is within tol of expected — typed stand-in for pytest.approx."""
+    return abs(value - expected) <= tol
+
+
 def _zero_counts() -> MiscueCounts:
     return MiscueCounts(
         correct=0,
@@ -31,7 +36,7 @@ def test_wpm_100_words_in_90_seconds(engine: ScoringEngine) -> None:
     counts = _zero_counts()
     counts["correct"] = 100
     result = engine.score(words, counts, total_passage_words=100)
-    assert result["wpm"] == pytest.approx(66.7, abs=0.1)
+    assert _approx(result["wpm"], 66.7, 0.1)
 
 
 def test_3_errors_in_50_words_is_instructional(engine: ScoringEngine) -> None:
@@ -42,7 +47,7 @@ def test_3_errors_in_50_words_is_instructional(engine: ScoringEngine) -> None:
     counts["mispronunciation"] = 2
     counts["substitution"] = 1
     result = engine.score(words, counts, total_passage_words=50)
-    assert result["word_recognition_pct"] == pytest.approx(94.0, abs=0.01)
+    assert _approx(result["word_recognition_pct"], 94.0)
     assert result["reading_level"] == "Instructional"
 
 
@@ -56,7 +61,7 @@ def test_7_errors_in_50_words_is_frustration(engine: ScoringEngine) -> None:
     counts["omission"] = 1
     counts["refusal_to_pronounce"] = 1
     result = engine.score(words, counts, total_passage_words=50)
-    assert result["word_recognition_pct"] == pytest.approx(86.0, abs=0.01)
+    assert _approx(result["word_recognition_pct"], 86.0)
     assert result["reading_level"] == "Frustration"
 
 
@@ -66,7 +71,7 @@ def test_0_errors_in_52_words_is_independent(engine: ScoringEngine) -> None:
     counts = _zero_counts()
     counts["correct"] = 52
     result = engine.score(words, counts, total_passage_words=52)
-    assert result["word_recognition_pct"] == pytest.approx(100.0, abs=0.01)
+    assert _approx(result["word_recognition_pct"], 100.0)
     assert result["reading_level"] == "Independent"
 
 
@@ -78,7 +83,7 @@ def test_insertions_and_repetitions_are_not_errors(engine: ScoringEngine) -> Non
     counts["insertion"] = 5
     counts["repetition"] = 5
     result = engine.score(words, counts, total_passage_words=50)
-    assert result["word_recognition_pct"] == pytest.approx(100.0, abs=0.01)
+    assert _approx(result["word_recognition_pct"], 100.0)
     assert result["reading_level"] == "Independent"
 
 
@@ -88,7 +93,7 @@ def test_empty_transcript_returns_zero_wpm(engine: ScoringEngine) -> None:
     counts["omission"] = 10
     result = engine.score([], counts, total_passage_words=10)
     assert result["wpm"] == 0.0
-    assert result["word_recognition_pct"] == pytest.approx(0.0, abs=0.01)
+    assert _approx(result["word_recognition_pct"], 0.0)
     assert result["reading_level"] == "Frustration"
 
 
@@ -107,7 +112,7 @@ def test_threshold_91_is_instructional(engine: ScoringEngine) -> None:
     counts["correct"] = 91
     counts["mispronunciation"] = 9
     result = engine.score(words, counts, total_passage_words=100)
-    assert result["word_recognition_pct"] == pytest.approx(91.0, abs=0.01)
+    assert _approx(result["word_recognition_pct"], 91.0)
     assert result["reading_level"] == "Instructional"
 
 
@@ -118,5 +123,5 @@ def test_threshold_97_is_independent(engine: ScoringEngine) -> None:
     counts["correct"] = 97
     counts["mispronunciation"] = 3
     result = engine.score(words, counts, total_passage_words=100)
-    assert result["word_recognition_pct"] == pytest.approx(97.0, abs=0.01)
+    assert _approx(result["word_recognition_pct"], 97.0)
     assert result["reading_level"] == "Independent"

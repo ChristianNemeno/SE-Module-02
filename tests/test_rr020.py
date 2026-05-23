@@ -17,7 +17,7 @@ from app.models.prosody_detector import ProsodyFlags
 from app.models.scoring import ScoringResult
 from app.models.session import SessionRecord
 from app.models.transcription import WordSegment
-from app.main import _pipeline_error_handler
+from app.main import _pipeline_error_handler  # type: ignore[reportPrivateUsage]
 from app.routers.analyze import AnalyzeController
 from app.routers.health import HealthController
 from app.services.analysis_orchestrator import AnalysisOrchestrator

@@ -1,5 +1,6 @@
 # tests/test_rr030.py
 from pathlib import Path
+from typing import cast
 
 import cv2
 import numpy as np
@@ -22,7 +23,7 @@ def detector() -> CVDetector:
 
 def _write_video(path: Path, frames: int, *, color: int = 0) -> None:
     """Writes a tiny solid-color .avi with `frames` frames for the edge-case tests."""
-    fourcc = cv2.VideoWriter_fourcc(*"MJPG")
+    fourcc = cast(int, cv2.VideoWriter_fourcc(*"MJPG"))  # type: ignore[reportAttributeAccessIssue]
     writer = cv2.VideoWriter(str(path), fourcc, 10.0, (320, 240))
     frame = np.full((240, 320, 3), color, dtype=np.uint8)
     for _ in range(frames):
