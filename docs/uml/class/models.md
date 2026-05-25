@@ -101,6 +101,7 @@ classDiagram
         <<TypedDict>>
         +text: str
         +word_count: int
+        +proper_nouns: list~str~
     }
     class PassageRepositoryProtocol {
         <<Protocol>>

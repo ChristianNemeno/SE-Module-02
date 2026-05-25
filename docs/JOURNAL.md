@@ -262,3 +262,87 @@
 - Tests: `9/9 passed` (`pytest tests/test_rr023.py`); 18/18 assertions
 - SOLID: ✓ — S: engine owns only score math; O: `ScoringEngineProtocol` allows alternative scorers; I: 1-method Protocol; D: `dependencies.py` returns the abstraction, concrete wired there
 - Docs: `lld/go2/scoring-engine.md`, `lld/models/scoring.md`, `uml/class/go2-classes.md` (updated), `uml/class/models.md` (updated), `hld/go2-pipeline.md` (updated)
+
+---
+
+### 2026-05-25 · Iteration 5 — Per-miscue console breakdown
+
+**Added**
+- `app/models/miscue.py` — `MiscueDetail` TypedDict (`miscue_type`, `passage_word`/`transcript_word` (either `None`), `start`/`end` (`None` when no spoken word)); `detail()` added to `MiscueClassifierProtocol`; new `MiscueReporterProtocol`
+- `app/services/go2/miscue_reporter.py` — `MiscueReporter`; `report()` prints non-`correct` miscues to stdout + `_format`/`_word`/`_timing` helpers
+- `tests/test_rr022.py` — 3 new `detail()` tests (mispronunciation words+timing, omission has no heard word/timing, detail-tally == classify counts)
+- `docs/lld/go2/miscue-reporter.md` — LLD for `MiscueReporter`
+
+**Changed**
+- `app/services/go2/miscue_classifier.py` — refactored to a single `_align() -> list[MiscueDetail]` source of truth; `classify()` now `Counter`-tallies `_align()` (counts unchanged); `detail()` returns `_align()`; `_detect_repetitions` now carries timing and emits repetition `MiscueDetail`s; `_apply_replace` → `_align_replace`; added `_spoken`/`_omission`/`_insertion` builders
+- `app/services/go2/pipeline.py` — `GO2Pipeline.__init__` takes `reporter: MiscueReporterProtocol`; `run()` calls `detail()` + `reporter.report()` after classification
+- `app/dependencies.py` — `get_miscue_reporter()` provider; wired into `get_go2_pipeline()`
+- `tests/test_rr020.py` — `FakeMiscueClassifier` gains `detail()`; new no-op `FakeMiscueReporter`; passed into the test `GO2Pipeline`
+- `docs/lld/go2/miscue-classifier.md`, `docs/lld/models/miscue.md`, `docs/uml/class/go2-classes.md`, `docs/uml/sequence/go2-pipeline-flow.md` — reflect detail path + reporter
+
+**Design Decisions**
+- **Console only** (user-confirmed): no change to `AssessmentResult`, `SessionRecord`/DB, or scoring math — purely additive diagnostics
+- **Per-record content** (user-confirmed): passage word + heard word + miscue type + start/end timing
+- **`print()` not `logging`** — uvicorn doesn't configure app loggers by default, so `logger.info` is often swallowed; `print` is guaranteed visible. Trade-off: no timestamp/level filtering. Easy swap to `logging` later if production filtering is wanted
+- **Single source of truth** — `classify()` and `detail()` both delegate to `_align()`; the detail list tallied by type equals `MiscueCounts` exactly (guarded by `test_detail_types_match_classify_counts`). Counts are byte-for-byte unchanged; the 11 existing RR-022 tests pass untouched
+- **Repetition records appended last** — dedup runs before SequenceMatcher alignment, so a repetition's in-sequence position isn't cheaply recoverable; acceptable for a diagnostic dump
+- **`MiscueReporter` is a class + Protocol wired in `dependencies.py`** — matches project DI conventions rather than an inline `print` in the pipeline
+
+**Verification**
+- Pyright: `0 errors` (strict) — `app/` + edited tests
+- Tests: `29/29 passed` (`test_rr022` 14, `test_rr020`, `test_rr023`)
+- Manual: ran `MiscueClassifier().detail(...)` → `MiscueReporter().report(...)` and confirmed the formatted miscue block prints to stdout with words + timing
+
+---
+
+### 2026-05-25 · Iteration 6 — Proper-noun leniency
+
+**Changed**
+- `app/models/passage.py` — `PassageRecord` gains `proper_nouns: NotRequired[list[str]]` (names/honorifics exempt from ASR-spelling penalties)
+- `app/models/miscue.py` — `MiscueClassifierProtocol.classify`/`detail` take optional `proper_nouns: list[str] | None`
+- `app/services/go2/miscue_classifier.py` — `_align` lowercases `proper_nouns` into a set; threaded through `_align_replace` → `_classify_replace`. New rule: a spoken proper noun (score ≥ 0.3) returns `correct` regardless of edit distance, ahead of the mispronunciation/substitution checks
+- `app/services/go2/pipeline.py` — `run()` reads `passage.get("proper_nouns") or []` and passes it into `classify()`/`detail()`
+- `app/services/db/passage_repository.py` — returns `proper_nouns=[]` with a TODO to add the column to `select()` once the `passages` table has `proper_nouns text[]`
+- `tests/test_rr020.py` — `FakeMiscueClassifier.classify`/`detail` widened to accept `proper_nouns`
+- `tests/test_rr022.py` — 3 new tests: proper noun read counts correct (case-insensitive) vs penalized without the list; refusal still refusal; omission still omission
+- Docs: `lld/go2/miscue-classifier.md`, `lld/models/miscue.md`, `lld/models/passage.md`, `uml/class/go2-classes.md`, `uml/class/models.md`, `uml/sequence/go2-pipeline-flow.md`
+
+**Design Decisions**
+- **Why it's needed** — English WhisperX re-spells Filipino names/honorifics (Anansi, Kuya), so a *correctly read* proper noun lands at edit distance 2–3 → false `mispronunciation`, which counts against `word_recognition_pct` (RR-023) and can drop a child a reading level
+- **Method param, not constructor** — proper nouns are per-passage (per request); the classifier is wired once in `dependencies.py`, and the pipeline already holds the `PassageRecord` at call time. A method arg keeps the classifier stateless and the singleton wiring intact
+- **Refusal/omission still penalize** — leniency only rescues a *spoken* name; score < 0.3 stays `refusal_to_pronounce`, a skipped name stays `omission`. Matches the proposed domain rule: "proper nouns never scored worse than correct unless score indicates refusal"
+- **`NotRequired` field + repo defaults to `[]`** (user-confirmed) — keeps existing `PassageRecord` construction sites valid and avoids breaking live fetches against a DB that lacks the column; feature stays inert until the migration + select() land
+- **Case-insensitive match** — `proper_nouns` lowercased into a set to align with `_tokenize`'s lowercasing, so the DB list can store names as they appear in the passage
+
+**Verification**
+- Pyright: `0 errors` (strict) — `app/` + edited tests
+- Tests: `38 passed, 2 skipped` (full suite); 3 new RR-022 proper-noun tests included
+- SOLID: ✓ — S: classifier still owns only miscue labeling; O: `MiscueClassifierProtocol` unchanged contract, leniency is an additive refinement; L: optional param keeps all implementations substitutable; I: Protocol still 2 methods; D: pipeline depends on the Protocol, concrete wired in `dependencies.py`
+
+---
+
+### 2026-05-25 · Iteration 7 — Auto proper-noun detection (capitalization)
+
+**Added**
+- `app/models/proper_noun.py` — `ProperNounExtractorProtocol` (`extract(passage_text) -> list[str]`)
+- `app/services/go2/proper_noun_extractor.py` — `CapitalizationProperNounExtractor`; derives proper nouns from passage capitalization, no DB list needed
+- `tests/test_proper_noun_extractor.py` — 6 tests (mid-sentence detection, all-occurrences rule, sentence-initial-only ignored, `I` stoplisted, empty, sorted+deduped)
+- `docs/lld/models/proper-noun.md`, `docs/lld/go2/proper-noun-extractor.md` — LLDs
+
+**Changed**
+- `app/services/go2/pipeline.py` — `GO2Pipeline.__init__` takes `proper_noun_extractor`; `run()` merges extractor output with `passage.get("proper_nouns")` (lowercased union) before classify/detail
+- `app/dependencies.py` — `get_proper_noun_extractor()` provider; wired into `get_go2_pipeline()`
+- `tests/test_rr020.py` — new `FakeProperNounExtractor` (returns `[]`); passed into the test `GO2Pipeline`
+- Docs: `lld/go2/go2-pipeline.md` (deps table + run flow; also caught up missing `reporter`), `uml/class/go2-classes.md`, `uml/sequence/go2-pipeline-flow.md`, `uml/component/dependency-graph.md`
+
+**Design Decisions**
+- **Refined rule, not naive** (user-confirmed) — a word qualifies if capitalized in *any* non-sentence-initial slot; matched by lowercased identity so *all* occurrences (incl. sentence-initial) are exempt. Fixes the naive rule's inconsistency where the same name is lenient mid-sentence but strict when it opens a sentence. Trade-off: a name appearing *only* sentence-initially is still missed
+- **Separate extractor class, not inline in the classifier** — capitalization detection is a distinct responsibility (SRP) and swappable (could later be NER or a curated source); the classifier stays untouched
+- **Derive at runtime from `passage["text"]`** — sidesteps the inert DB column; the feature works immediately. Extractor output is unioned with `PassageRecord.proper_nouns`, so a curated DB list still overrides/augments once wired
+- **Stoplist `{i, i'm, i'll, i've, i'd}`** — the English first-person pronoun and contractions are the main always-capitalized non-proper-nouns; explicit `frozenset` keeps the exception list auditable
+- **Method-level merge in the pipeline, not the classifier** — keeps the classifier's `proper_nouns` param a pure input; the pipeline owns sourcing/merging
+
+**Verification**
+- Pyright: `0 errors` (strict) — `app/` + edited/new tests (IDE showed transient "could not be resolved" on the new files; CLI pyright clean)
+- Tests: `44 passed, 2 skipped` (full suite); 6 new extractor tests included
+- SOLID: ✓ — S: extractor owns only proper-noun detection; O: new `ProperNounExtractorProtocol` allows alternative extractors without touching the pipeline; L: `FakeProperNounExtractor` substitutes cleanly; I: 1-method Protocol; D: pipeline depends on the Protocol, concrete wired in `dependencies.py`

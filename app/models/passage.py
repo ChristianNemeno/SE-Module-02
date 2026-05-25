@@ -1,4 +1,4 @@
-from typing import Protocol, TypedDict
+from typing import NotRequired, Protocol, TypedDict
 
 
 class PassageRecord(TypedDict):
@@ -6,6 +6,7 @@ class PassageRecord(TypedDict):
 
     text: str
     word_count: int
+    proper_nouns: NotRequired[list[str]]  # names/honorifics exempt from ASR-spelling penalties
 
 
 class PassageRepositoryProtocol(Protocol):

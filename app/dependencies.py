@@ -1,7 +1,9 @@
 from app.models.cv_detector import CVDetectorProtocol
 from app.models.media_extractor import MediaExtractorProtocol
+from app.models.miscue import MiscueReporterProtocol
 from app.models.passage import PassageRepositoryProtocol
 from app.models.prosody_detector import ProsodyDetectorProtocol
+from app.models.proper_noun import ProperNounExtractorProtocol
 from app.models.scoring import ScoringEngineProtocol
 from app.models.session import SessionRepositoryProtocol
 from app.models.transcription import TranscriberProtocol
@@ -10,7 +12,9 @@ from app.services.db.passage_repository import PassageRepository
 from app.services.db.session_repository import SessionRepository
 from app.services.db.supabase_client import get_supabase_client
 from app.services.go2.miscue_classifier import MiscueClassifier
+from app.services.go2.miscue_reporter import MiscueReporter
 from app.services.go2.pipeline import GO2Pipeline
+from app.services.go2.proper_noun_extractor import CapitalizationProperNounExtractor
 from app.services.go2.scoring_engine import ScoringEngine
 from app.services.go2.transcriber import get_transcriber_instance
 from app.services.go3.cv_detector import get_detector_instance
@@ -60,6 +64,16 @@ def get_media_extractor() -> MediaExtractorProtocol:
     return MediaExtractor()
 
 
+def get_miscue_reporter() -> MiscueReporterProtocol:
+    """FastAPI dependency — stateless MiscueReporter (prints miscues to console)."""
+    return MiscueReporter()
+
+
+def get_proper_noun_extractor() -> ProperNounExtractorProtocol:
+    """FastAPI dependency — stateless capitalization-based proper-noun extractor."""
+    return CapitalizationProperNounExtractor()
+
+
 def get_go2_pipeline() -> GO2Pipeline:
     """FastAPI dependency — fully wired GO2Pipeline."""
     return GO2Pipeline(
@@ -67,6 +81,8 @@ def get_go2_pipeline() -> GO2Pipeline:
         classifier=MiscueClassifier(),
         scorer=get_scoring_engine(),
         passage_repo=get_passage_repository(),
+        reporter=get_miscue_reporter(),
+        proper_noun_extractor=get_proper_noun_extractor(),
     )
 
 

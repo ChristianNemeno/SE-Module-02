@@ -11,7 +11,7 @@ from app.dependencies import get_analysis_orchestrator
 from app.models.assessment import AssessmentResult
 from app.models.cv_detector import CVFlags
 from app.models.media_extractor import ExtractionResult
-from app.models.miscue import MiscueCounts
+from app.models.miscue import MiscueCounts, MiscueDetail
 from app.models.passage import PassageRecord
 from app.models.prosody_detector import ProsodyFlags
 from app.models.scoring import ScoringResult
@@ -61,14 +61,44 @@ class FakeTranscriber:
 
 
 class FakeMiscueClassifier:
-    """Returns all-correct MiscueCounts."""
+    """Returns all-correct MiscueCounts and an empty detail list."""
 
-    def classify(self, transcript_words: list[WordSegment], passage_text: str) -> MiscueCounts:
+    def classify(
+        self,
+        transcript_words: list[WordSegment],
+        passage_text: str,
+        proper_nouns: list[str] | None = None,
+    ) -> MiscueCounts:
         """Return zero-error miscue counts."""
         return MiscueCounts(
             correct=2, mispronunciation=0, substitution=0,
             omission=0, insertion=0, repetition=0, refusal_to_pronounce=0,
         )
+
+    def detail(
+        self,
+        transcript_words: list[WordSegment],
+        passage_text: str,
+        proper_nouns: list[str] | None = None,
+    ) -> list[MiscueDetail]:
+        """Return no per-miscue records."""
+        return []
+
+
+class FakeMiscueReporter:
+    """No-op reporter — swallows the miscue detail in tests."""
+
+    def report(self, passage_id: str, details: list[MiscueDetail]) -> None:
+        """Discard the detail list."""
+        return None
+
+
+class FakeProperNounExtractor:
+    """Returns no proper nouns."""
+
+    def extract(self, passage_text: str) -> list[str]:
+        """Return an empty proper-noun list."""
+        return []
 
 
 class FakeScoringEngine:
@@ -146,6 +176,8 @@ def _make_orchestrator(
             classifier=FakeMiscueClassifier(),
             scorer=FakeScoringEngine(),
             passage_repo=FakePassageRepository(),
+            reporter=FakeMiscueReporter(),
+            proper_noun_extractor=FakeProperNounExtractor(),
         ),
         go3_pipeline=GO3Pipeline(
             cv_detector=FakeCVDetector(),

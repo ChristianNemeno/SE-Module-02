@@ -96,3 +96,69 @@ def test_all_seven_keys_always_present(clf: MiscueClassifier) -> None:
         "omission", "insertion", "repetition", "refusal_to_pronounce",
     }
     assert set(counts.keys()) == expected
+
+
+def test_detail_mispronunciation_carries_words_and_timing(clf: MiscueClassifier) -> None:
+    """detail() records passage word, heard word, and spoken timing for a mispronunciation."""
+    passage = "friend"
+    words = [WordSegment(word="freind", start=1.2, end=1.5, score=0.9)]
+    details = clf.detail(words, passage)
+    mispron = [d for d in details if d["miscue_type"] == "mispronunciation"]
+    assert len(mispron) == 1
+    assert mispron[0]["passage_word"] == "friend"
+    assert mispron[0]["transcript_word"] == "freind"
+    assert mispron[0]["start"] == 1.2
+    assert mispron[0]["end"] == 1.5
+
+
+def test_detail_omission_has_no_transcript_word_or_timing(clf: MiscueClassifier) -> None:
+    """detail() omission record has the passage word but no heard word or timing."""
+    passage = "the big cat"
+    words = [_w("the"), _w("cat")]
+    details = clf.detail(words, passage)
+    omission = [d for d in details if d["miscue_type"] == "omission"]
+    assert len(omission) == 1
+    assert omission[0]["passage_word"] == "big"
+    assert omission[0]["transcript_word"] is None
+    assert omission[0]["start"] is None
+    assert omission[0]["end"] is None
+
+
+def test_proper_noun_read_counts_as_correct(clf: MiscueClassifier) -> None:
+    """A spoken proper noun counts correct despite ASR mis-spelling; penalized without the list."""
+    passage = "anansi the spider"
+    words = [_w("nancy"), _w("the"), _w("spider")]
+    lenient = clf.classify(words, passage, proper_nouns=["Anansi"])  # case-insensitive
+    strict = clf.classify(words, passage)
+    assert lenient["correct"] == 3
+    assert lenient["mispronunciation"] == 0
+    assert lenient["substitution"] == 0
+    assert strict["correct"] == 2  # "nancy" is penalized when the name isn't whitelisted
+
+
+def test_proper_noun_refusal_still_refusal(clf: MiscueClassifier) -> None:
+    """Leniency doesn't rescue a refusal — score < 0.3 stays refusal even for a proper noun."""
+    passage = "anansi"
+    words = [_w("uh", score=0.1)]
+    counts = clf.classify(words, passage, proper_nouns=["anansi"])
+    assert counts["refusal_to_pronounce"] == 1
+    assert counts["correct"] == 0
+
+
+def test_proper_noun_omission_still_omission(clf: MiscueClassifier) -> None:
+    """Leniency only applies to spoken words — a skipped proper noun is still an omission."""
+    passage = "anansi the spider"
+    words = [_w("the"), _w("spider")]
+    counts = clf.classify(words, passage, proper_nouns=["anansi"])
+    assert counts["omission"] == 1
+    assert counts["correct"] == 2
+
+
+def test_detail_types_match_classify_counts(clf: MiscueClassifier) -> None:
+    """The detail list tallied by type equals the classify() counts (single source of truth)."""
+    passage = "the big cat sat on the mat"
+    words = [_w("the"), _w("the"), _w("cot"), _w("um"), _w("sat"), _w("on"), _w("the"), _w("mat")]
+    counts = clf.classify(words, passage)
+    details = clf.detail(words, passage)
+    for category, expected in counts.items():
+        assert sum(1 for d in details if d["miscue_type"] == category) == expected
