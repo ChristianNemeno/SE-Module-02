@@ -8,12 +8,14 @@ import parselmouth  # type: ignore[import-untyped]
 from app.models.prosody_detector import ProsodyFlags
 
 _INAUDIBLE_RMS_THRESHOLD = 0.01
-_MONOTONE_F0_STD_THRESHOLD = 20.0   # Hz
-_WORD_BY_WORD_IOI_THRESHOLD = 0.8   # seconds
+_MONOTONE_F0_STD_THRESHOLD = 20.0       # Hz
 _MIN_DURATION_SECONDS = 5.0
 _MIN_VOICED_FRAMES = 10
-_MIN_ONSET_EVENTS = 3
 _SAMPLE_RATE = 16000
+_SILENCE_RMS_THRESHOLD: float = 0.015      # frames below this = silence; above noise floor (~0.005), below soft speech (~0.03)
+_SILENCE_MIN_FRAMES: int = 6               # min consecutive silent frames to count as inter-word gap (~192ms at hop=512, sr=16000)
+_WORD_BY_WORD_GAP_THRESHOLD: float = 0.35  # mean gap > 350ms = word-by-word; fluent ceiling ~200ms, robotic floor ~480ms
+_MIN_GAP_EVENTS: int = 2                   # need ≥2 interior gaps to compute a meaningful mean
 
 
 def _default_flags() -> ProsodyFlags:
@@ -53,9 +55,35 @@ class ProsodyAmplitudeDetector:
         return float(np.std(voiced)) < _MONOTONE_F0_STD_THRESHOLD
 
     def _detect_word_by_word(self, y: np.ndarray, sr: int | float) -> bool:
-        """True if mean inter-onset interval exceeds threshold — indicates halting, word-by-word pacing."""
-        onsets: np.ndarray = librosa.onset.onset_detect(y=y, sr=sr, units="time")  # type: ignore[no-untyped-call]
-        if len(onsets) < _MIN_ONSET_EVENTS:
+        """True if mean inter-word silence gap exceeds threshold — indicates halting, word-by-word pacing."""
+        hop_length: int = 512
+        rms: np.ndarray = librosa.feature.rms(  # type: ignore[no-untyped-call]
+            y=y, frame_length=2048, hop_length=hop_length
+        )[0]
+        n_frames: int = len(rms)
+        silent_mask: np.ndarray = rms < _SILENCE_RMS_THRESHOLD
+
+        transitions: np.ndarray = np.diff(silent_mask.astype(np.int8))
+        gap_starts: np.ndarray = np.where(transitions == 1)[0] + 1
+        gap_ends: np.ndarray = np.where(transitions == -1)[0] + 1
+
+        if silent_mask[0]:
+            gap_starts = np.concatenate([[0], gap_starts])
+        if silent_mask[-1]:
+            gap_ends = np.concatenate([gap_ends, [n_frames]])
+
+        n_gaps: int = min(len(gap_starts), len(gap_ends))
+        gap_starts = gap_starts[:n_gaps]
+        gap_ends = gap_ends[:n_gaps]
+
+        # Keep only interior gaps — exclude leading/trailing recording silence
+        interior: np.ndarray = (gap_starts > 0) & (gap_ends < n_frames)
+        gap_lengths: np.ndarray = (gap_ends - gap_starts)[interior]
+        real_gaps: np.ndarray = gap_lengths[gap_lengths >= _SILENCE_MIN_FRAMES]
+
+        if len(real_gaps) < _MIN_GAP_EVENTS:
             return False
-        iois: np.ndarray = np.diff(onsets)
-        return float(np.mean(iois)) > _WORD_BY_WORD_IOI_THRESHOLD
+
+        frame_duration: float = hop_length / float(sr)
+        gap_durations: np.ndarray = real_gaps * frame_duration
+        return float(np.mean(gap_durations)) > _WORD_BY_WORD_GAP_THRESHOLD

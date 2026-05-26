@@ -345,4 +345,25 @@
 **Verification**
 - Pyright: `0 errors` (strict) — `app/` + edited/new tests (IDE showed transient "could not be resolved" on the new files; CLI pyright clean)
 - Tests: `44 passed, 2 skipped` (full suite); 6 new extractor tests included
+
+---
+
+### 2026-05-26 · Iteration 8 — Fix word_by_word_reading detection (silence-gap)
+
+**Changed**
+- `app/services/go3/prosody_detector.py` — replaced `_detect_word_by_word` onset-IOI approach with silence-gap detection; robotic reading was returning `False` because `librosa.onset.onset_detect()` is a music percussion detector, not a speech detector
+- `pyrightconfig.json` — added `venvPath: "."` and `venv: ".venv"`; pyright was not resolving venv packages (numpy), causing false import errors on `prosody_detector.py`
+
+**Removed**
+- `_WORD_BY_WORD_IOI_THRESHOLD = 0.8` — onset-based threshold, replaced by gap-based
+- `_MIN_ONSET_EVENTS = 3` — onset guard, replaced by gap guard
+
+**Design Decisions**
+- **Silence-gap over onset-IOI** — directly measures how long the student pauses between words (the actual definition of word-by-word reading); onset detection is unreliable for speech (merges slow words, splits within-word phoneme transitions)
+- **`_SILENCE_MIN_FRAMES = 6` (~192ms)** — clears the full consonant-closure range (2–4 frames, 64–128ms); only real inter-word pauses pass
+- **Interior gaps only** — leading/trailing recording silence excluded to avoid inflating the mean from mic on/off artefacts
+- **`hop_length=512` explicit** — matches `_detect_inaudible` and keeps the `hop_length / sr` frame-to-time conversion tied to the same literal value
+
+**Verification**
+- Pyright: `0 errors` (strict) — full `app/`
 - SOLID: ✓ — S: extractor owns only proper-noun detection; O: new `ProperNounExtractorProtocol` allows alternative extractors without touching the pipeline; L: `FakeProperNounExtractor` substitutes cleanly; I: 1-method Protocol; D: pipeline depends on the Protocol, concrete wired in `dependencies.py`
