@@ -1,4 +1,6 @@
-from app.models.miscue import MiscueClassifierProtocol, MiscueReporterProtocol
+from collections import Counter
+
+from app.models.miscue import MiscueClassifierProtocol, MiscueCounts, MiscueDetail, MiscueReporterProtocol, MiscueType
 from app.models.passage import PassageRepositoryProtocol
 from app.models.pipeline_results import GO2Result
 from app.models.proper_noun import ProperNounExtractorProtocol
@@ -34,10 +36,22 @@ class GO2Pipeline:
             | {n.lower() for n in (passage.get("proper_nouns") or [])}
         )
         words = self._transcriber.transcribe(wav_path, passage["text"])
-        miscues = self._classifier.classify(words, passage["text"], proper_nouns)
-        self._reporter.report(
-            passage_id, self._classifier.detail(words, passage["text"], proper_nouns)
+
+        # Single alignment pass — detail() is the source; counts are tallied from it.
+        # Avoids running _align() twice (classify + detail would each call it).
+        details: list[MiscueDetail] = self._classifier.detail(words, passage["text"], proper_nouns)
+        tally: Counter[MiscueType] = Counter(d["miscue_type"] for d in details)
+        miscues = MiscueCounts(
+            correct=tally["correct"],
+            mispronunciation=tally["mispronunciation"],
+            substitution=tally["substitution"],
+            omission=tally["omission"],
+            insertion=tally["insertion"],
+            repetition=tally["repetition"],
+            refusal_to_pronounce=tally["refusal_to_pronounce"],
         )
+        self._reporter.report(passage_id, details)
+
         scoring = self._scorer.score(words, miscues, passage["word_count"])
         return GO2Result(
             wpm=scoring["wpm"],

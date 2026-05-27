@@ -367,3 +367,19 @@
 **Verification**
 - Pyright: `0 errors` (strict) — full `app/`
 - SOLID: ✓ — S: extractor owns only proper-noun detection; O: new `ProperNounExtractorProtocol` allows alternative extractors without touching the pipeline; L: `FakeProperNounExtractor` substitutes cleanly; I: 1-method Protocol; D: pipeline depends on the Protocol, concrete wired in `dependencies.py`
+
+---
+
+### 2026-05-27 · Iteration 9 — Code-review fixes (test assertion + double alignment)
+
+**Changed**
+- `tests/test_rr020.py` — updated `test_ffmpeg_failure_returns_500_pipeline_failed`: docstring and assertion changed from `PIPELINE_FAILED` → `EXTRACTION_FAILED` to match the error code the orchestrator actually raises
+- `app/services/go2/pipeline.py` — `run()` now calls `detail()` once, tallies counts via `Counter`, and passes the stored list to the reporter; `classify()` is no longer called separately, so `_align()` runs once per request instead of twice
+
+**Design Decisions**
+- **Single-pass alignment via `detail()`** — `classify()` internally calls `_align()`; so did the separate `detail()` call for the reporter. Replacing the pair with one `detail()` call + a local `Counter` tally halves alignment work without changing the Protocol interface or test contracts. The tally is identical to what `classify()` computes internally
+
+**Verification**
+- Pyright: `0 errors` (strict) — `app/services/go2/pipeline.py`
+- Tests: `38 passed` (`test_rr020`, `test_rr022`, `test_rr023`, `test_proper_noun_extractor`)
+- SOLID: ✓ — S: pipeline still only sequences steps; O/L/I/D: no Protocol changes
