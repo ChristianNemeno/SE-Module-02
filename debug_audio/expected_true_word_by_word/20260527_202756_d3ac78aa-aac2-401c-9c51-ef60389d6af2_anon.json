@@ -1,0 +1,18 @@
+{
+  "wpm": 47.23340188736802,
+  "word_recognition_pct": 100.0,
+  "reading_level": "Independent",
+  "correct": 80,
+  "mispronunciation": 0,
+  "substitution": 0,
+  "omission": 0,
+  "insertion": 0,
+  "repetition": 0,
+  "refusal_to_pronounce": 0,
+  "finger_pointing": false,
+  "loss_of_place": false,
+  "monotone_reading": false,
+  "word_by_word_reading": true,
+  "inaudible_reading": false,
+  "db_save_failed": false
+}

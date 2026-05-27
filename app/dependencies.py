@@ -1,4 +1,6 @@
+from app.config import get_settings
 from app.models.cv_detector import CVDetectorProtocol
+from app.models.debug_saver import DebugSaverProtocol, NullDebugSaver
 from app.models.media_extractor import MediaExtractorProtocol
 from app.models.miscue import MiscueReporterProtocol
 from app.models.passage import PassageRepositoryProtocol
@@ -11,6 +13,7 @@ from app.services.analysis_orchestrator import AnalysisOrchestrator
 from app.services.db.passage_repository import PassageRepository
 from app.services.db.session_repository import SessionRepository
 from app.services.db.supabase_client import get_supabase_client
+from app.services.debug_audio_saver import AudioDebugSaver
 from app.services.go2.miscue_classifier import MiscueClassifier
 from app.services.go2.miscue_reporter import MiscueReporter
 from app.services.go2.pipeline import GO2Pipeline
@@ -74,6 +77,14 @@ def get_proper_noun_extractor() -> ProperNounExtractorProtocol:
     return CapitalizationProperNounExtractor()
 
 
+def get_debug_saver() -> DebugSaverProtocol:
+    """Returns AudioDebugSaver if DEBUG_AUDIO_DIR is configured, NullDebugSaver otherwise."""
+    debug_dir = get_settings().DEBUG_AUDIO_DIR
+    if debug_dir:
+        return AudioDebugSaver(debug_dir)
+    return NullDebugSaver()
+
+
 def get_go2_pipeline() -> GO2Pipeline:
     """FastAPI dependency — fully wired GO2Pipeline."""
     return GO2Pipeline(
@@ -101,4 +112,5 @@ def get_analysis_orchestrator() -> AnalysisOrchestrator:
         go2_pipeline=get_go2_pipeline(),
         go3_pipeline=get_go3_pipeline(),
         session_repo=get_session_repository(),
+        debug_saver=get_debug_saver(),
     )

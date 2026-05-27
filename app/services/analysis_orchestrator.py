@@ -7,6 +7,7 @@ import tempfile
 from fastapi import HTTPException
 
 from app.models.assessment import AssessmentResult
+from app.models.debug_saver import DebugSaverProtocol, NullDebugSaver
 from app.models.media_extractor import MediaExtractorProtocol
 from app.models.session import SessionRecord, SessionRepositoryProtocol
 from app.services.go2.pipeline import GO2Pipeline
@@ -25,12 +26,14 @@ class AnalysisOrchestrator:
         go2_pipeline: GO2Pipeline,
         go3_pipeline: GO3Pipeline,
         session_repo: SessionRepositoryProtocol,
+        debug_saver: DebugSaverProtocol | None = None,
     ) -> None:
-        """Inject all orchestration dependencies."""
+        """Inject all orchestration dependencies. debug_saver defaults to NullDebugSaver."""
         self._extractor = extractor
         self._go2 = go2_pipeline
         self._go3 = go3_pipeline
         self._session_repo = session_repo
+        self._debug_saver: DebugSaverProtocol = debug_saver if debug_saver is not None else NullDebugSaver()
 
     async def run(
         self,
@@ -40,9 +43,9 @@ class AnalysisOrchestrator:
         learner_id: str,
     ) -> AssessmentResult:
         """
-        Full pipeline: write upload → extract → GO2+GO3 in parallel → consolidate → DB insert.
+        Full pipeline: write upload → extract → GO2+GO3 in parallel → consolidate → debug save → DB insert.
         Returns AssessmentResult with db_save_failed=True if the session INSERT fails.
-        Raises HTTPException(500) with code EXTRACTION_FAILED / ANALYSIS_FAILED / CONSOLIDATION_FAILED depending on which stage threw.
+        Raises HTTPException(500) with code EXTRACTION_FAILED / ANALYSIS_FAILED / CONSOLIDATION_FAILED.
         """
         temp_dir = tempfile.mkdtemp()
         try:
@@ -104,6 +107,12 @@ class AnalysisOrchestrator:
                 status_code=500,
                 detail={"error": str(exc), "code": "CONSOLIDATION_FAILED"},
             ) from exc
+
+        # Save debug artifacts — non-fatal
+        try:
+            self._debug_saver.save(extraction["wav_path"], result, passage_id, learner_id)
+        except Exception:
+            logger.warning("debug artifact save failed — non-fatal", exc_info=True)
 
         # Skip DB insert when no learner identity is available
         if not learner_id.strip():

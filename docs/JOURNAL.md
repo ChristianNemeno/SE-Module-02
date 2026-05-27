@@ -438,3 +438,71 @@ A word-by-word reader pauses at almost every word boundary (~300–450 ms); thos
 - Pyright: `0 errors` (strict) — `app/services/go3/prosody_detector.py`, `tests/test_word_by_word_fixtures.py`
 - Tests: `58 passed` (full suite, 173.83 s) — 2 new word_by_word fixture tests included
 - Manual: `inspect_word_by_word.py` on both fixtures confirms fluent → 0.105/s → False, word-by-word → 0.298/s → True
+
+---
+
+### 2026-05-27 · Iteration 12 — Debug Audio Saver
+
+**Added**
+- `app/models/debug_saver.py` — `DebugSaverProtocol` (1-method Protocol) + `NullDebugSaver` (null-object no-op)
+- `app/services/debug_audio_saver.py` — `AudioDebugSaver`: copies extracted WAV + writes `AssessmentResult` JSON to `DEBUG_AUDIO_DIR` after each analysis; sanitizes user-controlled identifiers before use in filenames
+- `docs/lld/models/debug-saver.md` — LLD for Protocol + NullDebugSaver
+- `docs/lld/services/debug-audio-saver.md` — LLD for AudioDebugSaver (includes security notes)
+
+**Changed**
+- `app/config.py` — added `DEBUG_AUDIO_DIR: str = ""` setting; set to a path in `.env` to enable
+- `app/dependencies.py` — added `get_debug_saver()`: returns `AudioDebugSaver` if `DEBUG_AUDIO_DIR` set, else `NullDebugSaver`; wired into `get_analysis_orchestrator()`
+- `app/services/analysis_orchestrator.py` — injected `debug_saver: DebugSaverProtocol | None`; calls `_debug_saver.save()` after consolidation, non-fatal (WARNING log on failure)
+- `docs/uml/class/orchestrator-classes.md` — added Protocol + both implementations
+- `docs/uml/component/dependency-graph.md` — added `DS/NDS` branch to orchestrator wiring
+- `docs/lld/services/analysis-orchestrator.md` — added `debug_saver` to constructor deps + error handling table
+
+**Design Decisions**
+- **Null-object over `Optional`** — `NullDebugSaver` eliminates `if self._debug_saver is not None` in the hot path; orchestrator always calls `.save()` unconditionally
+- **`NullDebugSaver` in `app/models/`** — needed by `analysis_orchestrator.py` as default; models can't import from services, so null object lives alongside the Protocol
+- **Two-layer path traversal defence** — `_safe()` strips non-filename chars from `passage_id`/`learner_id` (user-controlled); `realpath` boundary check in `save()` as belt-and-suspenders against future refactors
+- **Non-fatal save** — orchestrator wraps `debug_saver.save()` in try/except; a full disk or permission error on the debug dir must never fail a student's assessment
+
+**Verification**
+- Pyright: `0 errors` (strict) — all 5 changed/added files
+- SOLID: ✓ S/O/L/I/D — `DebugSaverProtocol` (1 method) makes the saver open for extension; concretes wired in `dependencies.py` only
+
+---
+
+### 2026-05-27 · Iteration 13 — Replace word-by-word detector: silence-ratio + speech-rate
+
+**Changed**
+- `app/services/go3/prosody_detector.py` — `_detect_word_by_word` rewritten from gap-rate to silence-ratio + speech-rate AND-gate:
+  - Removed constants: `_SILENCE_MIN_FRAMES`, `_MEDIUM_GAP_MAX`, `_WORD_BY_WORD_RATE_THRESHOLD`, `_MIN_GAP_EVENTS`
+  - Added constants: `_MIN_SPEECH_FRAMES = 4` (~128ms blip filter), `_WBW_SILENCE_RATIO_THRESHOLD = 0.40`, `_WBW_SPEECH_RATE_THRESHOLD = 1.0`
+  - New logic: count silent frames / total → silence_ratio; count speech segments (runs of ≥ 4 frames) / duration → speech_rate; flag True iff silence_ratio ≥ 0.40 AND speech_rate < 1.0 seg/s
+  - Diagnostic log replaced with `silence_ratio=X speech_rate=Y seg/s n_segments=N duration=Ds -> decision=B`
+- `docs/lld/go3/prosody-detector.md` — refreshed method table to describe new metric; fixed stale `monotone` threshold (was "20 Hz", actual is 30 Hz)
+
+**Why the old approach failed**
+A debug recording at 146 WPM (clearly fluent reader) was tripping `word_by_word_reading=True`. Root cause: the gap-rate algorithm counted any silence gap in [0.19s, 0.50s] as "medium" and divided by duration. Fluent readers respect punctuation, producing clause pauses around 0.48s — those landed inside the medium bucket, inflating the rate above the 0.20/s threshold. The detector was confusing comma pauses with within-sentence word hesitation.
+
+**Why silence-ratio + speech-rate works**
+- **silence_ratio** captures the true definition of halting speech: total dead air per second of recording. Calibrated values: fluent readers 33–39%, WBW readers 41–58%. Robust to where the silence falls within the recording.
+- **speech_rate** (segments/second) captures pacing density: fluent readers produce 0.92–1.43 segments/sec; WBW readers produce 0.79–0.96 segments/sec. The < 1.0 cutoff is conservative.
+- AND-gate: both must indicate WBW. Defense in depth — a borderline silence_ratio is rescued by the speech_rate signal, and vice versa.
+
+**Calibration set (5 samples, all pass)**
+| Case | WPM | silence% | seg/s | Decision | Expected |
+|---|---|---|---|---|---|
+| FIX FP fluent | – | 33.2 | 0.92 | False ✓ | False |
+| FIX TP WBW | – | 41.3 | 0.96 | True ✓ | True |
+| DEBUG TP 47 WPM | 47 | 58.0 | 0.79 | True ✓ | True |
+| DEBUG FP (the bug) | 146 | 38.9 | 1.12 | False ✓ | False |
+| DEBUG FF fast | 173 | 35.9 | 1.43 | False ✓ | False |
+
+**Design Decisions**
+- **Single-file rewrite, no plumbing change** — kept `_detect_word_by_word(y, sr) -> bool` signature; `detect()`, Protocol, Pipeline, DI wiring all untouched. Pure internal refactor.
+- **Rejected: WPM gate in ResultConsolidator** — would have crossed pipeline boundaries (GO3 reading GO2's WPM). User preferred to fix the acoustic signal in place.
+- **Rejected: lowering `_MEDIUM_GAP_MAX` from 0.5→0.4** — passed all 4 then-known samples but with razor-thin margins (1.5% on false-positive side). Wouldn't survive new recordings.
+- **`_MIN_SPEECH_FRAMES = 4`** (~128ms) — filters mic blips and breath without losing legitimate short words. Calibrated against the 5 samples.
+
+**Verification**
+- Pyright: `0 errors` (strict) — `app/services/go3/prosody_detector.py`
+- Tests: `58 passed` (full suite, 175.35s) — existing `test_word_by_word_fixtures.py` (2 tests) still passes against new logic
+- Manual: all 5 calibration samples pass with comfortable margins (silence_ratio: 33–58% range, threshold 40% sits in a 2.4pp gap; speech_rate: 0.79–1.43/s range, threshold 1.0 sits in a 0.04/s gap)

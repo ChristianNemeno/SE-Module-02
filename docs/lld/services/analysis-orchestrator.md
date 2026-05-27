@@ -1,7 +1,7 @@
 # `AnalysisOrchestrator` — Low-Level Design
 
 ## Responsibility
-Async coordinator: write temp file → extract media → run GO2+GO3 in parallel → merge → persist session.
+Async coordinator: write temp file → extract media → run GO2+GO3 in parallel → merge → save debug artifacts → persist session.
 
 ## Implements
 [`AnalysisOrchestrator`](../../uml/class/orchestrator-classes.md)
@@ -13,19 +13,21 @@ Async coordinator: write temp file → extract media → run GO2+GO3 in parallel
 | `go2_pipeline` | `GO2Pipeline` | `dependencies.py` |
 | `go3_pipeline` | `GO3Pipeline` | `dependencies.py` |
 | `session_repo` | `SessionRepositoryProtocol` | `dependencies.py` |
+| `debug_saver` | `DebugSaverProtocol \| None` | `dependencies.py` (defaults to `NullDebugSaver`) |
 
 ## Methods
 | Method | Purpose | Edge cases |
 |---|---|---|
 | `run(upload_bytes, source_filename, passage_id, learner_id)` | Public entry point; owns temp dir lifecycle via try/finally | `shutil.rmtree` with `ignore_errors=True` ensures cleanup even on exception |
-| `_execute(...)` | Inner pipeline; runs inside the temp dir context | ffmpeg failure → 500; pipeline exception → 500; DB exception → db_save_failed=True; blank learner_id → skip insert |
+| `_execute(...)` | Inner pipeline; runs inside the temp dir context | ffmpeg failure → 500; pipeline exception → 500; DB exception → db_save_failed=True; blank learner_id → skip insert; debug save failure → logged, non-fatal |
 
 ## Error Handling
 | Failure | Behaviour |
 |---|---|
-| `RuntimeError` from MediaExtractor | `HTTPException(500, {"code": "PIPELINE_FAILED"})` |
-| Any exception from `asyncio.gather` | `HTTPException(500, {"code": "PIPELINE_FAILED"})` |
-| `ValueError` from ResultConsolidator | `HTTPException(500, {"code": "PIPELINE_FAILED"})` |
+| `RuntimeError` from MediaExtractor | `HTTPException(500, {"code": "EXTRACTION_FAILED"})` |
+| Any exception from `asyncio.gather` | `HTTPException(500, {"code": "ANALYSIS_FAILED"})` |
+| `ValueError` from ResultConsolidator | `HTTPException(500, {"code": "CONSOLIDATION_FAILED"})` |
+| Any exception from `debug_saver.save` | logged as WARNING, non-fatal — result still returned |
 | blank `learner_id` | skip DB insert, return result with `db_save_failed=False` |
 | Any exception from `session_repo.insert` | return result with `db_save_failed=True` (HTTP 200) |
 

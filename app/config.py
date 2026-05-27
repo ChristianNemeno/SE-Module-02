@@ -21,6 +21,8 @@ class Settings(BaseSettings):
 
     ALLOWED_ORIGINS: list[str] = ["http://localhost:5173"]
 
+    DEBUG_AUDIO_DIR: str = ""   # set to a path (e.g. ./debug_audio) to save WAV + JSON per request
+
 
 @lru_cache
 def get_settings() -> Settings:

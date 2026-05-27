@@ -14,10 +14,12 @@ flowchart LR
     deps -->|per-call| SR[SessionRepository\nclient]
     deps -->|per-call| RPT[MiscueReporter]
     deps -->|per-call| PNE[CapitalizationProperNounExtractor]
+    deps -->|per-call\nDEBUG_AUDIO_DIR set| DS[AudioDebugSaver]
+    deps -->|per-call\nDEBUG_AUDIO_DIR unset| NDS[NullDebugSaver]
 
     deps -->|constructs| GO2[GO2Pipeline\nT + C + S + PR + RPT + PNE]
     deps -->|constructs| GO3[GO3Pipeline\nCV + PA]
-    deps -->|constructs| ORC[AnalysisOrchestrator\nME + GO2 + GO3 + SR]
+    deps -->|constructs| ORC[AnalysisOrchestrator\nME + GO2 + GO3 + SR + DS/NDS]
 
     ORC -->|Depends| Ctrl[AnalyzeController\nPOST /analyze]
 ```
