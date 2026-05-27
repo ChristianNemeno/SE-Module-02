@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import shutil
 import tempfile
@@ -11,6 +12,8 @@ from app.models.session import SessionRecord, SessionRepositoryProtocol
 from app.services.go2.pipeline import GO2Pipeline
 from app.services.go3.pipeline import GO3Pipeline
 from app.utils.result_consolidator import ResultConsolidator
+
+logger = logging.getLogger(__name__)
 
 
 class AnalysisOrchestrator:
@@ -39,7 +42,7 @@ class AnalysisOrchestrator:
         """
         Full pipeline: write upload → extract → GO2+GO3 in parallel → consolidate → DB insert.
         Returns AssessmentResult with db_save_failed=True if the session INSERT fails.
-        Raises HTTPException(500) with code PIPELINE_FAILED if GO2/GO3/extraction fails.
+        Raises HTTPException(500) with code EXTRACTION_FAILED / ANALYSIS_FAILED / CONSOLIDATION_FAILED depending on which stage threw.
         """
         temp_dir = tempfile.mkdtemp()
         try:
@@ -69,9 +72,10 @@ class AnalysisOrchestrator:
                 self._extractor.extract, source_path, temp_dir
             )
         except RuntimeError as exc:
+            logger.exception("Media extraction failed for %s", source_filename)
             raise HTTPException(
                 status_code=500,
-                detail={"error": str(exc), "code": "PIPELINE_FAILED"},
+                detail={"error": str(exc), "code": "EXTRACTION_FAILED"},
             ) from exc
 
         # Run GO2 + GO3 in parallel (both are blocking — run in thread pool)
@@ -81,22 +85,35 @@ class AnalysisOrchestrator:
                 asyncio.to_thread(self._go3.run, extraction["mp4_path"], extraction["wav_path"]),
             )
         except Exception as exc:
+            logger.exception("GO2/GO3 analysis failed for passage=%s", passage_id)
             raise HTTPException(
                 status_code=500,
-                detail={"error": str(exc), "code": "PIPELINE_FAILED"},
+                detail={"error": str(exc), "code": "ANALYSIS_FAILED"},
             ) from exc
 
         # Merge + validate
         try:
             result = ResultConsolidator.merge(dict(go2_result), dict(go3_result))
         except ValueError as exc:
+            logger.exception(
+                "Result consolidation failed go2_keys=%s go3_keys=%s",
+                sorted(go2_result.keys()),
+                sorted(go3_result.keys()),
+            )
             raise HTTPException(
                 status_code=500,
-                detail={"error": str(exc), "code": "PIPELINE_FAILED"},
+                detail={"error": str(exc), "code": "CONSOLIDATION_FAILED"},
             ) from exc
 
         # Skip DB insert when no learner identity is available
         if not learner_id.strip():
+            logger.info(
+                "analyze ok passage=%s wpm=%.1f pct=%.1f level=%s db_save_failed=skipped",
+                passage_id,
+                result.wpm,
+                result.word_recognition_pct,
+                result.reading_level,
+            )
             return result
 
         # Persist session — failure is non-fatal; learner still gets their results
@@ -123,6 +140,19 @@ class AnalysisOrchestrator:
         try:
             await asyncio.to_thread(self._session_repo.insert, record)
         except Exception:
+            logger.exception(
+                "Session insert failed for learner=%s passage=%s",
+                learner_id,
+                passage_id,
+            )
             db_save_failed = True
 
+        logger.info(
+            "analyze ok passage=%s wpm=%.1f pct=%.1f level=%s db_save_failed=%s",
+            passage_id,
+            result.wpm,
+            result.word_recognition_pct,
+            result.reading_level,
+            db_save_failed,
+        )
         return result.model_copy(update={"db_save_failed": db_save_failed})

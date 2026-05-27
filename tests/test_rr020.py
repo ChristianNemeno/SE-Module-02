@@ -269,11 +269,11 @@ def test_missing_passage_id_returns_422(client: TestClient) -> None:
 
 
 def test_ffmpeg_failure_returns_500_pipeline_failed() -> None:
-    """ffmpeg failure → 500 with code=PIPELINE_FAILED."""
+    """ffmpeg failure → 500 with code=EXTRACTION_FAILED."""
     c = _make_client(_make_orchestrator(extractor=FakeMediaExtractorThatFails()))
     resp = _post(c)
     assert resp.status_code == 500
-    assert resp.json()["code"] == "PIPELINE_FAILED"
+    assert resp.json()["code"] == "EXTRACTION_FAILED"
 
 def test_db_failure_returns_200_with_db_save_failed_true() -> None:
     """DB insert failure → still 200 but db_save_failed=True so frontend can retry."""

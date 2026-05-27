@@ -345,4 +345,96 @@
 **Verification**
 - Pyright: `0 errors` (strict) — `app/` + edited/new tests (IDE showed transient "could not be resolved" on the new files; CLI pyright clean)
 - Tests: `44 passed, 2 skipped` (full suite); 6 new extractor tests included
+
+---
+
+### 2026-05-26 · Iteration 8 — Fix word_by_word_reading detection (silence-gap)
+
+**Changed**
+- `app/services/go3/prosody_detector.py` — replaced `_detect_word_by_word` onset-IOI approach with silence-gap detection; robotic reading was returning `False` because `librosa.onset.onset_detect()` is a music percussion detector, not a speech detector
+- `pyrightconfig.json` — added `venvPath: "."` and `venv: ".venv"`; pyright was not resolving venv packages (numpy), causing false import errors on `prosody_detector.py`
+
+**Removed**
+- `_WORD_BY_WORD_IOI_THRESHOLD = 0.8` — onset-based threshold, replaced by gap-based
+- `_MIN_ONSET_EVENTS = 3` — onset guard, replaced by gap guard
+
+**Design Decisions**
+- **Silence-gap over onset-IOI** — directly measures how long the student pauses between words (the actual definition of word-by-word reading); onset detection is unreliable for speech (merges slow words, splits within-word phoneme transitions)
+- **`_SILENCE_MIN_FRAMES = 6` (~192ms)** — clears the full consonant-closure range (2–4 frames, 64–128ms); only real inter-word pauses pass
+- **Interior gaps only** — leading/trailing recording silence excluded to avoid inflating the mean from mic on/off artefacts
+- **`hop_length=512` explicit** — matches `_detect_inaudible` and keeps the `hop_length / sr` frame-to-time conversion tied to the same literal value
+
+**Verification**
+- Pyright: `0 errors` (strict) — full `app/`
 - SOLID: ✓ — S: extractor owns only proper-noun detection; O: new `ProperNounExtractorProtocol` allows alternative extractors without touching the pipeline; L: `FakeProperNounExtractor` substitutes cleanly; I: 1-method Protocol; D: pipeline depends on the Protocol, concrete wired in `dependencies.py`
+
+---
+
+### 2026-05-27 · Iteration 9 — Code-review fixes (test assertion + double alignment)
+
+**Changed**
+- `tests/test_rr020.py` — updated `test_ffmpeg_failure_returns_500_pipeline_failed`: docstring and assertion changed from `PIPELINE_FAILED` → `EXTRACTION_FAILED` to match the error code the orchestrator actually raises
+- `app/services/go2/pipeline.py` — `run()` now calls `detail()` once, tallies counts via `Counter`, and passes the stored list to the reporter; `classify()` is no longer called separately, so `_align()` runs once per request instead of twice
+
+**Design Decisions**
+- **Single-pass alignment via `detail()`** — `classify()` internally calls `_align()`; so did the separate `detail()` call for the reporter. Replacing the pair with one `detail()` call + a local `Counter` tally halves alignment work without changing the Protocol interface or test contracts. The tally is identical to what `classify()` computes internally
+
+**Verification**
+- Pyright: `0 errors` (strict) — `app/services/go2/pipeline.py`
+- Tests: `38 passed` (`test_rr020`, `test_rr022`, `test_rr023`, `test_proper_noun_extractor`)
+- SOLID: ✓ — S: pipeline still only sequences steps; O/L/I/D: no Protocol changes
+
+---
+
+### 2026-05-27 · Iteration 10 — Instrument `word_by_word_reading` for false-positive triage
+
+**Changed**
+- `app/services/go3/prosody_detector.py` — added `_LOG = logging.getLogger(__name__)`; `_detect_word_by_word` now emits one `INFO` line per call with `raw_runs`, `interior_gaps`, the full `durations` array (rounded to 3 decimals), `min/median/mean/max`, the threshold, and the boolean decision. Early-return-on-insufficient-gaps path also logs a short line. No threshold or return-value changes — purely diagnostic.
+
+**Added**
+- `tools/inspect_word_by_word.py` — small CLI that takes a WAV path, enables `INFO` logging, calls `ProsodyAmplitudeDetector().detect(...)`, and prints the returned `ProsodyFlags`. Inspection tool for triaging the user-reported false positive (`word_by_word_reading=True` on a clearly fluent read: WPM 136.87, recognition 98.75%, Independent, 1 mispronunciation). Reuses the detector — no duplicate gap math in the script.
+
+**Design Decisions**
+- **Why instrument before fixing** — three candidate fixes (median+cap, percentile, WhisperX-aware) all change the threshold semantics differently. Picking blind risks trading the current false positive for a future false negative. One diagnostic run on a real fluent recording shows the actual gap distribution; the right fix follows from that data.
+- **`logging.getLogger(__name__)` over `print`** — Iteration 5's journal note about uvicorn swallowing app loggers is obsolete: `app/main.py` now configures the root logger and `app/routers/analyze.py` already uses `logging`. New lines land in the same stream as `/analyze outbound body=...`.
+- **Diagnostic, not metric** — gap stats stay in logs, not in `ProsodyFlags` or `AssessmentResult`. The DB schema, the API response, and the detector's Protocol are all unchanged. The log line is the only new artifact.
+- **Why the hypothesis is plausible without the data yet** — the 192 ms `_SILENCE_MIN_FRAMES` floor specifically filters out genuine inter-word gaps (~100-200 ms) and keeps comma/period pauses (~300-800 ms), so the mean is computed over the wrong distribution on short Phil-IRI passages. The fresh recording's `durations` array will confirm or refute that.
+
+**Verification**
+- Pyright: `0 errors` (strict) — `app/services/go3/prosody_detector.py`, `tools/inspect_word_by_word.py`
+- Tests: `56 passed` (full suite, 174.20 s) — additive logging doesn't change any return path
+- SOLID: N/A — change is a logger import + two `_LOG.info(...)` calls inside an existing private method. No new classes, no Protocol changes, no responsibility shifts.
+
+**Next**
+- User records a fresh fluent Phil-IRI read and runs `python tools/inspect_word_by_word.py <file>`. From the printed gap array, pick the fix: median+cap, percentile, or WhisperX-aware. Then drop the logging back to `DEBUG` or remove it.
+
+---
+
+### 2026-05-27 · Iteration 11 — Fix `word_by_word_reading`: replace mean-gap with medium-gap rate
+
+**Changed**
+- `app/services/go3/prosody_detector.py` — replaced mean-gap-duration test with medium-gap-rate detection:
+  - Removed `_WORD_BY_WORD_GAP_THRESHOLD = 0.35`; added `_MEDIUM_GAP_MAX = 0.5` and `_WORD_BY_WORD_RATE_THRESHOLD = 0.2`
+  - `_detect_word_by_word` now counts gaps in `[192 ms, 500 ms]` ("medium gaps" — within-sentence word pauses) and divides by total audio duration; flags True if that rate > 0.2/s
+  - Diagnostic `_LOG.info` updated to also emit `medium_gaps`, `total_duration`, `medium_rate`
+
+**Added**
+- `tests/test_word_by_word_fixtures.py` — 2 parametrized fixture tests: `expected_false/test-me-ef_1.wav` must return `word_by_word_reading=False`; `expected_true/test-me-et-1.wav` must return `True`. Mirrors the monotone-fixtures test pattern.
+- `tests/fixtures/word_by_word_samples/expected_true/` — directory renamed from `exptected_true` (typo fix)
+
+**Why the old approach failed**
+The previous algorithm computed `mean(interior_gap_durations) > 0.35 s`. Because the 192 ms `_SILENCE_MIN_FRAMES` floor filters out genuine short inter-word gaps, what survived in `durations` was dominated by sentence-end and breath pauses (~500–960 ms). A fluent reader with expressive pacing had mean = 0.62 s and a true word-by-word reader had mean = 0.58 s — statistic was **inverted** relative to the domain definition.
+
+**Why medium-gap rate works**
+A word-by-word reader pauses at almost every word boundary (~300–450 ms); those pauses accumulate into a high rate of medium-length gaps per second of audio. A fluent reader's inter-word gaps are shorter (filtered out by the 192 ms floor) or longer (sentence breaks, classified as > 500 ms and excluded from the medium count). Calibrated on real recordings: fluent 0.105/s, word-by-word 0.298/s → threshold 0.200/s gives ~50% margin on both sides.
+
+**Design Decisions**
+- **Rate per total duration, not per gap count** — normalises for passage length and speaking speed; the same pacing pattern produces the same rate on a 30 s or 70 s read
+- **`_MEDIUM_GAP_MAX = 0.5 s`** — sentence-end pauses in normal reading reliably exceed 500 ms; the 0.5 s ceiling keeps the count focused on within-sentence word pauses
+- **Diagnostic log retained at INFO** — useful for threshold tuning as more fixture recordings are added; can be downgraded to DEBUG once stable
+- **Fixtures and test added this iteration** — not deferred; the rate-based fix is empirically validated on two real recordings before merging
+
+**Verification**
+- Pyright: `0 errors` (strict) — `app/services/go3/prosody_detector.py`, `tests/test_word_by_word_fixtures.py`
+- Tests: `58 passed` (full suite, 173.83 s) — 2 new word_by_word fixture tests included
+- Manual: `inspect_word_by_word.py` on both fixtures confirms fluent → 0.105/s → False, word-by-word → 0.298/s → True
