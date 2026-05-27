@@ -262,3 +262,179 @@
 - Tests: `9/9 passed` (`pytest tests/test_rr023.py`); 18/18 assertions
 - SOLID: ✓ — S: engine owns only score math; O: `ScoringEngineProtocol` allows alternative scorers; I: 1-method Protocol; D: `dependencies.py` returns the abstraction, concrete wired there
 - Docs: `lld/go2/scoring-engine.md`, `lld/models/scoring.md`, `uml/class/go2-classes.md` (updated), `uml/class/models.md` (updated), `hld/go2-pipeline.md` (updated)
+
+---
+
+### 2026-05-25 · Iteration 5 — Per-miscue console breakdown
+
+**Added**
+- `app/models/miscue.py` — `MiscueDetail` TypedDict (`miscue_type`, `passage_word`/`transcript_word` (either `None`), `start`/`end` (`None` when no spoken word)); `detail()` added to `MiscueClassifierProtocol`; new `MiscueReporterProtocol`
+- `app/services/go2/miscue_reporter.py` — `MiscueReporter`; `report()` prints non-`correct` miscues to stdout + `_format`/`_word`/`_timing` helpers
+- `tests/test_rr022.py` — 3 new `detail()` tests (mispronunciation words+timing, omission has no heard word/timing, detail-tally == classify counts)
+- `docs/lld/go2/miscue-reporter.md` — LLD for `MiscueReporter`
+
+**Changed**
+- `app/services/go2/miscue_classifier.py` — refactored to a single `_align() -> list[MiscueDetail]` source of truth; `classify()` now `Counter`-tallies `_align()` (counts unchanged); `detail()` returns `_align()`; `_detect_repetitions` now carries timing and emits repetition `MiscueDetail`s; `_apply_replace` → `_align_replace`; added `_spoken`/`_omission`/`_insertion` builders
+- `app/services/go2/pipeline.py` — `GO2Pipeline.__init__` takes `reporter: MiscueReporterProtocol`; `run()` calls `detail()` + `reporter.report()` after classification
+- `app/dependencies.py` — `get_miscue_reporter()` provider; wired into `get_go2_pipeline()`
+- `tests/test_rr020.py` — `FakeMiscueClassifier` gains `detail()`; new no-op `FakeMiscueReporter`; passed into the test `GO2Pipeline`
+- `docs/lld/go2/miscue-classifier.md`, `docs/lld/models/miscue.md`, `docs/uml/class/go2-classes.md`, `docs/uml/sequence/go2-pipeline-flow.md` — reflect detail path + reporter
+
+**Design Decisions**
+- **Console only** (user-confirmed): no change to `AssessmentResult`, `SessionRecord`/DB, or scoring math — purely additive diagnostics
+- **Per-record content** (user-confirmed): passage word + heard word + miscue type + start/end timing
+- **`print()` not `logging`** — uvicorn doesn't configure app loggers by default, so `logger.info` is often swallowed; `print` is guaranteed visible. Trade-off: no timestamp/level filtering. Easy swap to `logging` later if production filtering is wanted
+- **Single source of truth** — `classify()` and `detail()` both delegate to `_align()`; the detail list tallied by type equals `MiscueCounts` exactly (guarded by `test_detail_types_match_classify_counts`). Counts are byte-for-byte unchanged; the 11 existing RR-022 tests pass untouched
+- **Repetition records appended last** — dedup runs before SequenceMatcher alignment, so a repetition's in-sequence position isn't cheaply recoverable; acceptable for a diagnostic dump
+- **`MiscueReporter` is a class + Protocol wired in `dependencies.py`** — matches project DI conventions rather than an inline `print` in the pipeline
+
+**Verification**
+- Pyright: `0 errors` (strict) — `app/` + edited tests
+- Tests: `29/29 passed` (`test_rr022` 14, `test_rr020`, `test_rr023`)
+- Manual: ran `MiscueClassifier().detail(...)` → `MiscueReporter().report(...)` and confirmed the formatted miscue block prints to stdout with words + timing
+
+---
+
+### 2026-05-25 · Iteration 6 — Proper-noun leniency
+
+**Changed**
+- `app/models/passage.py` — `PassageRecord` gains `proper_nouns: NotRequired[list[str]]` (names/honorifics exempt from ASR-spelling penalties)
+- `app/models/miscue.py` — `MiscueClassifierProtocol.classify`/`detail` take optional `proper_nouns: list[str] | None`
+- `app/services/go2/miscue_classifier.py` — `_align` lowercases `proper_nouns` into a set; threaded through `_align_replace` → `_classify_replace`. New rule: a spoken proper noun (score ≥ 0.3) returns `correct` regardless of edit distance, ahead of the mispronunciation/substitution checks
+- `app/services/go2/pipeline.py` — `run()` reads `passage.get("proper_nouns") or []` and passes it into `classify()`/`detail()`
+- `app/services/db/passage_repository.py` — returns `proper_nouns=[]` with a TODO to add the column to `select()` once the `passages` table has `proper_nouns text[]`
+- `tests/test_rr020.py` — `FakeMiscueClassifier.classify`/`detail` widened to accept `proper_nouns`
+- `tests/test_rr022.py` — 3 new tests: proper noun read counts correct (case-insensitive) vs penalized without the list; refusal still refusal; omission still omission
+- Docs: `lld/go2/miscue-classifier.md`, `lld/models/miscue.md`, `lld/models/passage.md`, `uml/class/go2-classes.md`, `uml/class/models.md`, `uml/sequence/go2-pipeline-flow.md`
+
+**Design Decisions**
+- **Why it's needed** — English WhisperX re-spells Filipino names/honorifics (Anansi, Kuya), so a *correctly read* proper noun lands at edit distance 2–3 → false `mispronunciation`, which counts against `word_recognition_pct` (RR-023) and can drop a child a reading level
+- **Method param, not constructor** — proper nouns are per-passage (per request); the classifier is wired once in `dependencies.py`, and the pipeline already holds the `PassageRecord` at call time. A method arg keeps the classifier stateless and the singleton wiring intact
+- **Refusal/omission still penalize** — leniency only rescues a *spoken* name; score < 0.3 stays `refusal_to_pronounce`, a skipped name stays `omission`. Matches the proposed domain rule: "proper nouns never scored worse than correct unless score indicates refusal"
+- **`NotRequired` field + repo defaults to `[]`** (user-confirmed) — keeps existing `PassageRecord` construction sites valid and avoids breaking live fetches against a DB that lacks the column; feature stays inert until the migration + select() land
+- **Case-insensitive match** — `proper_nouns` lowercased into a set to align with `_tokenize`'s lowercasing, so the DB list can store names as they appear in the passage
+
+**Verification**
+- Pyright: `0 errors` (strict) — `app/` + edited tests
+- Tests: `38 passed, 2 skipped` (full suite); 3 new RR-022 proper-noun tests included
+- SOLID: ✓ — S: classifier still owns only miscue labeling; O: `MiscueClassifierProtocol` unchanged contract, leniency is an additive refinement; L: optional param keeps all implementations substitutable; I: Protocol still 2 methods; D: pipeline depends on the Protocol, concrete wired in `dependencies.py`
+
+---
+
+### 2026-05-25 · Iteration 7 — Auto proper-noun detection (capitalization)
+
+**Added**
+- `app/models/proper_noun.py` — `ProperNounExtractorProtocol` (`extract(passage_text) -> list[str]`)
+- `app/services/go2/proper_noun_extractor.py` — `CapitalizationProperNounExtractor`; derives proper nouns from passage capitalization, no DB list needed
+- `tests/test_proper_noun_extractor.py` — 6 tests (mid-sentence detection, all-occurrences rule, sentence-initial-only ignored, `I` stoplisted, empty, sorted+deduped)
+- `docs/lld/models/proper-noun.md`, `docs/lld/go2/proper-noun-extractor.md` — LLDs
+
+**Changed**
+- `app/services/go2/pipeline.py` — `GO2Pipeline.__init__` takes `proper_noun_extractor`; `run()` merges extractor output with `passage.get("proper_nouns")` (lowercased union) before classify/detail
+- `app/dependencies.py` — `get_proper_noun_extractor()` provider; wired into `get_go2_pipeline()`
+- `tests/test_rr020.py` — new `FakeProperNounExtractor` (returns `[]`); passed into the test `GO2Pipeline`
+- Docs: `lld/go2/go2-pipeline.md` (deps table + run flow; also caught up missing `reporter`), `uml/class/go2-classes.md`, `uml/sequence/go2-pipeline-flow.md`, `uml/component/dependency-graph.md`
+
+**Design Decisions**
+- **Refined rule, not naive** (user-confirmed) — a word qualifies if capitalized in *any* non-sentence-initial slot; matched by lowercased identity so *all* occurrences (incl. sentence-initial) are exempt. Fixes the naive rule's inconsistency where the same name is lenient mid-sentence but strict when it opens a sentence. Trade-off: a name appearing *only* sentence-initially is still missed
+- **Separate extractor class, not inline in the classifier** — capitalization detection is a distinct responsibility (SRP) and swappable (could later be NER or a curated source); the classifier stays untouched
+- **Derive at runtime from `passage["text"]`** — sidesteps the inert DB column; the feature works immediately. Extractor output is unioned with `PassageRecord.proper_nouns`, so a curated DB list still overrides/augments once wired
+- **Stoplist `{i, i'm, i'll, i've, i'd}`** — the English first-person pronoun and contractions are the main always-capitalized non-proper-nouns; explicit `frozenset` keeps the exception list auditable
+- **Method-level merge in the pipeline, not the classifier** — keeps the classifier's `proper_nouns` param a pure input; the pipeline owns sourcing/merging
+
+**Verification**
+- Pyright: `0 errors` (strict) — `app/` + edited/new tests (IDE showed transient "could not be resolved" on the new files; CLI pyright clean)
+- Tests: `44 passed, 2 skipped` (full suite); 6 new extractor tests included
+
+---
+
+### 2026-05-26 · Iteration 8 — Fix word_by_word_reading detection (silence-gap)
+
+**Changed**
+- `app/services/go3/prosody_detector.py` — replaced `_detect_word_by_word` onset-IOI approach with silence-gap detection; robotic reading was returning `False` because `librosa.onset.onset_detect()` is a music percussion detector, not a speech detector
+- `pyrightconfig.json` — added `venvPath: "."` and `venv: ".venv"`; pyright was not resolving venv packages (numpy), causing false import errors on `prosody_detector.py`
+
+**Removed**
+- `_WORD_BY_WORD_IOI_THRESHOLD = 0.8` — onset-based threshold, replaced by gap-based
+- `_MIN_ONSET_EVENTS = 3` — onset guard, replaced by gap guard
+
+**Design Decisions**
+- **Silence-gap over onset-IOI** — directly measures how long the student pauses between words (the actual definition of word-by-word reading); onset detection is unreliable for speech (merges slow words, splits within-word phoneme transitions)
+- **`_SILENCE_MIN_FRAMES = 6` (~192ms)** — clears the full consonant-closure range (2–4 frames, 64–128ms); only real inter-word pauses pass
+- **Interior gaps only** — leading/trailing recording silence excluded to avoid inflating the mean from mic on/off artefacts
+- **`hop_length=512` explicit** — matches `_detect_inaudible` and keeps the `hop_length / sr` frame-to-time conversion tied to the same literal value
+
+**Verification**
+- Pyright: `0 errors` (strict) — full `app/`
+- SOLID: ✓ — S: extractor owns only proper-noun detection; O: new `ProperNounExtractorProtocol` allows alternative extractors without touching the pipeline; L: `FakeProperNounExtractor` substitutes cleanly; I: 1-method Protocol; D: pipeline depends on the Protocol, concrete wired in `dependencies.py`
+
+---
+
+### 2026-05-27 · Iteration 9 — Code-review fixes (test assertion + double alignment)
+
+**Changed**
+- `tests/test_rr020.py` — updated `test_ffmpeg_failure_returns_500_pipeline_failed`: docstring and assertion changed from `PIPELINE_FAILED` → `EXTRACTION_FAILED` to match the error code the orchestrator actually raises
+- `app/services/go2/pipeline.py` — `run()` now calls `detail()` once, tallies counts via `Counter`, and passes the stored list to the reporter; `classify()` is no longer called separately, so `_align()` runs once per request instead of twice
+
+**Design Decisions**
+- **Single-pass alignment via `detail()`** — `classify()` internally calls `_align()`; so did the separate `detail()` call for the reporter. Replacing the pair with one `detail()` call + a local `Counter` tally halves alignment work without changing the Protocol interface or test contracts. The tally is identical to what `classify()` computes internally
+
+**Verification**
+- Pyright: `0 errors` (strict) — `app/services/go2/pipeline.py`
+- Tests: `38 passed` (`test_rr020`, `test_rr022`, `test_rr023`, `test_proper_noun_extractor`)
+- SOLID: ✓ — S: pipeline still only sequences steps; O/L/I/D: no Protocol changes
+
+---
+
+### 2026-05-27 · Iteration 10 — Instrument `word_by_word_reading` for false-positive triage
+
+**Changed**
+- `app/services/go3/prosody_detector.py` — added `_LOG = logging.getLogger(__name__)`; `_detect_word_by_word` now emits one `INFO` line per call with `raw_runs`, `interior_gaps`, the full `durations` array (rounded to 3 decimals), `min/median/mean/max`, the threshold, and the boolean decision. Early-return-on-insufficient-gaps path also logs a short line. No threshold or return-value changes — purely diagnostic.
+
+**Added**
+- `tools/inspect_word_by_word.py` — small CLI that takes a WAV path, enables `INFO` logging, calls `ProsodyAmplitudeDetector().detect(...)`, and prints the returned `ProsodyFlags`. Inspection tool for triaging the user-reported false positive (`word_by_word_reading=True` on a clearly fluent read: WPM 136.87, recognition 98.75%, Independent, 1 mispronunciation). Reuses the detector — no duplicate gap math in the script.
+
+**Design Decisions**
+- **Why instrument before fixing** — three candidate fixes (median+cap, percentile, WhisperX-aware) all change the threshold semantics differently. Picking blind risks trading the current false positive for a future false negative. One diagnostic run on a real fluent recording shows the actual gap distribution; the right fix follows from that data.
+- **`logging.getLogger(__name__)` over `print`** — Iteration 5's journal note about uvicorn swallowing app loggers is obsolete: `app/main.py` now configures the root logger and `app/routers/analyze.py` already uses `logging`. New lines land in the same stream as `/analyze outbound body=...`.
+- **Diagnostic, not metric** — gap stats stay in logs, not in `ProsodyFlags` or `AssessmentResult`. The DB schema, the API response, and the detector's Protocol are all unchanged. The log line is the only new artifact.
+- **Why the hypothesis is plausible without the data yet** — the 192 ms `_SILENCE_MIN_FRAMES` floor specifically filters out genuine inter-word gaps (~100-200 ms) and keeps comma/period pauses (~300-800 ms), so the mean is computed over the wrong distribution on short Phil-IRI passages. The fresh recording's `durations` array will confirm or refute that.
+
+**Verification**
+- Pyright: `0 errors` (strict) — `app/services/go3/prosody_detector.py`, `tools/inspect_word_by_word.py`
+- Tests: `56 passed` (full suite, 174.20 s) — additive logging doesn't change any return path
+- SOLID: N/A — change is a logger import + two `_LOG.info(...)` calls inside an existing private method. No new classes, no Protocol changes, no responsibility shifts.
+
+**Next**
+- User records a fresh fluent Phil-IRI read and runs `python tools/inspect_word_by_word.py <file>`. From the printed gap array, pick the fix: median+cap, percentile, or WhisperX-aware. Then drop the logging back to `DEBUG` or remove it.
+
+---
+
+### 2026-05-27 · Iteration 11 — Fix `word_by_word_reading`: replace mean-gap with medium-gap rate
+
+**Changed**
+- `app/services/go3/prosody_detector.py` — replaced mean-gap-duration test with medium-gap-rate detection:
+  - Removed `_WORD_BY_WORD_GAP_THRESHOLD = 0.35`; added `_MEDIUM_GAP_MAX = 0.5` and `_WORD_BY_WORD_RATE_THRESHOLD = 0.2`
+  - `_detect_word_by_word` now counts gaps in `[192 ms, 500 ms]` ("medium gaps" — within-sentence word pauses) and divides by total audio duration; flags True if that rate > 0.2/s
+  - Diagnostic `_LOG.info` updated to also emit `medium_gaps`, `total_duration`, `medium_rate`
+
+**Added**
+- `tests/test_word_by_word_fixtures.py` — 2 parametrized fixture tests: `expected_false/test-me-ef_1.wav` must return `word_by_word_reading=False`; `expected_true/test-me-et-1.wav` must return `True`. Mirrors the monotone-fixtures test pattern.
+- `tests/fixtures/word_by_word_samples/expected_true/` — directory renamed from `exptected_true` (typo fix)
+
+**Why the old approach failed**
+The previous algorithm computed `mean(interior_gap_durations) > 0.35 s`. Because the 192 ms `_SILENCE_MIN_FRAMES` floor filters out genuine short inter-word gaps, what survived in `durations` was dominated by sentence-end and breath pauses (~500–960 ms). A fluent reader with expressive pacing had mean = 0.62 s and a true word-by-word reader had mean = 0.58 s — statistic was **inverted** relative to the domain definition.
+
+**Why medium-gap rate works**
+A word-by-word reader pauses at almost every word boundary (~300–450 ms); those pauses accumulate into a high rate of medium-length gaps per second of audio. A fluent reader's inter-word gaps are shorter (filtered out by the 192 ms floor) or longer (sentence breaks, classified as > 500 ms and excluded from the medium count). Calibrated on real recordings: fluent 0.105/s, word-by-word 0.298/s → threshold 0.200/s gives ~50% margin on both sides.
+
+**Design Decisions**
+- **Rate per total duration, not per gap count** — normalises for passage length and speaking speed; the same pacing pattern produces the same rate on a 30 s or 70 s read
+- **`_MEDIUM_GAP_MAX = 0.5 s`** — sentence-end pauses in normal reading reliably exceed 500 ms; the 0.5 s ceiling keeps the count focused on within-sentence word pauses
+- **Diagnostic log retained at INFO** — useful for threshold tuning as more fixture recordings are added; can be downgraded to DEBUG once stable
+- **Fixtures and test added this iteration** — not deferred; the rate-based fix is empirically validated on two real recordings before merging
+
+**Verification**
+- Pyright: `0 errors` (strict) — `app/services/go3/prosody_detector.py`, `tests/test_word_by_word_fixtures.py`
+- Tests: `58 passed` (full suite, 173.83 s) — 2 new word_by_word fixture tests included
+- Manual: `inspect_word_by_word.py` on both fixtures confirms fluent → 0.105/s → False, word-by-word → 0.298/s → True

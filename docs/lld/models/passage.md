@@ -11,6 +11,7 @@ Data shape and fetch contract for Phil-IRI passage records.
 |---|---|---|
 | `text` | `str` | Full passage text for transcription alignment |
 | `word_count` | `int` | Pre-computed for WPM calculation |
+| `proper_nouns` | `NotRequired[list[str]]` | Names/honorifics exempt from ASR-spelling penalties; classifier counts them correct when spoken. Optional — defaults to `[]` |
 
 ## Methods — PassageRepositoryProtocol
 | Method | Purpose | Edge cases |

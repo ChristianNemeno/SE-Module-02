@@ -13,11 +13,13 @@ Coordinates ASR transcription, miscue classification, and WPM scoring for a sing
 | `classifier` | `MiscueClassifierProtocol` | `dependencies.py` |
 | `scorer` | `ScoringEngineProtocol` | `dependencies.py` |
 | `passage_repo` | `PassageRepositoryProtocol` | `dependencies.py` |
+| `reporter` | `MiscueReporterProtocol` | `dependencies.py` |
+| `proper_noun_extractor` | `ProperNounExtractorProtocol` | `dependencies.py` |
 
 ## Methods
 | Method | Purpose | Edge cases |
 |---|---|---|
-| `run(wav_path, passage_id)` | Fetch passage → transcribe → classify → score → return GO2Result | Raises `ValueError` if passage not found; propagates transcriber/classifier exceptions |
+| `run(wav_path, passage_id)` | Fetch passage → extract+merge proper nouns → transcribe → classify → report → score → return GO2Result | Raises `ValueError` if passage not found; propagates transcriber/classifier exceptions |
 
 ## Diagrams
 | Diagram | Link |

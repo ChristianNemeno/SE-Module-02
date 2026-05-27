@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-FastAPI microservice for **ReadRight Module 2** — the audio-based reading assessment pipeline. It transcribes a student reading a Phil-IRI passage aloud, classifies miscues, computes WPM + word recognition %, and returns a reading level. There is also a GO3 computer-vision pipeline (behavioral flags) that runs in parallel.
+FastAPI microservice for **ReadRight Module 2** — the audio + video reading assessment pipeline. A student records themselves reading a Phil-IRI passage; the service extracts WAV + MP4 from the upload, runs GO2 (ASR → miscue classification → WPM/scoring) and GO3 (computer-vision behavioral flags + prosody) in parallel, merges the results into a single `AssessmentResult`, and persists a session row to Supabase.
 
 ## Commands
 
@@ -18,6 +18,9 @@ uvicorn app.main:app --reload
 # Type check (strict — must be 0 errors before committing)
 .venv/bin/pyright app/
 
+# Run tests
+.venv/bin/pytest
+
 # Install dependencies
 pip install -r requirements.txt
 # NOTE: ffmpeg system binary also required: sudo apt-get install ffmpeg
@@ -27,26 +30,42 @@ pip install -r requirements.txt
 
 ```
 app/
-  main.py              # App factory + lifespan (WhisperX preloads here)
-  config.py            # pydantic-settings Settings, WHISPERX_MODEL/DEVICE configurable via .env
-  dependencies.py      # FastAPI dependency providers (get_transcriber → TranscriberProtocol)
+  main.py                       # App factory + lifespan (WhisperX, MediaPipe, Supabase preload here)
+  config.py                     # pydantic-settings Settings (API key, WhisperX, Supabase, CORS)
+  dependencies.py               # FastAPI dependency providers — only place concretes are wired
   routers/
-    analyze.py         # AnalyzeController — HTTP only, no business logic
+    analyze.py                  # AnalyzeController — POST /analyze, HTTP only
+    health.py                   # HealthController — GET /health
   services/
-    go2/               # transcriber.py (done), miscue_classifier.py (RR-022), scoring_engine.py (RR-023)
-    go3/               # CVDetector, ProsodyAmplitudeDetector (not this module's responsibility)
-  models/
-    assessment.py      # AssessmentResult Pydantic model — the single API response schema
-    transcription.py   # WordSegment TypedDict + TranscriberProtocol
+    analysis_orchestrator.py    # AnalysisOrchestrator — async coordinator (GO2 ‖ GO3 → merge → DB)
+    media_extractor.py          # MediaExtractor — ffmpeg subprocess, splits upload into wav + mp4
+    go2/
+      pipeline.py               # GO2Pipeline — passage fetch → ASR → miscue classify → score
+      transcriber.py            # WhisperX ASR + forced alignment (singleton model)
+      miscue_classifier.py      # Phil-IRI miscue taxonomy classifier
+      miscue_reporter.py        # Per-miscue console breakdown (dev aid)
+      proper_noun_extractor.py  # Capitalization-based proper-noun detector
+      scoring_engine.py         # WPM, word-recognition %, reading level
+    go3/
+      pipeline.py               # GO3Pipeline — CV + prosody in sequence
+      cv_detector.py            # MediaPipe finger-pointing / loss-of-place / word-by-word
+      prosody_detector.py       # Amplitude-based monotone / inaudible detection
+    db/
+      supabase_client.py        # Lazy singleton supabase-py client (service key)
+      passage_repository.py     # Fetches Phil-IRI passage text by passage_id
+      session_repository.py     # Inserts session row after a successful run
+  models/                       # Pydantic models, TypedDicts, and Protocols (one file per domain)
   utils/
-    result_consolidator.py  # Merges GO2 + GO3 results (stub, wired in RR-020)
+    result_consolidator.py      # Merges GO2 + GO3 dicts into AssessmentResult
+tests/                          # pytest — test_rr020..rr032 cover each ticket
 ```
 
 ### Key Patterns
 
-- **Class-based controllers** — no bare route functions. `AnalyzeController` registers routes via `router.add_api_route()`.
-- **Protocol interfaces** — concrete classes satisfy Protocols (`TranscriberProtocol`). Concretes are only wired in `dependencies.py`.
-- **Singleton at startup** — WhisperX models load once in the FastAPI `lifespan` context manager via `load_models()`. Never load per request.
+- **Class-based controllers** — no bare route functions. Controllers register routes via `router.add_api_route()`.
+- **Protocol interfaces** — concrete classes satisfy Protocols (`TranscriberProtocol`, `MiscueClassifierProtocol`, `CVDetectorProtocol`, etc.). Concretes are only constructed in `dependencies.py`.
+- **Singleton at startup** — WhisperX + MediaPipe models and the Supabase client load once in the FastAPI `lifespan` context manager. Never load per request.
+- **Async orchestration** — `AnalysisOrchestrator.run` writes the upload to a `tempfile.mkdtemp()`, runs `asyncio.gather(go2, go3)` via `asyncio.to_thread` (both pipelines are blocking), and cleans up the temp dir in `finally`.
 - **Strong types** — Python 3.12, pyright strict. `type X = ...` aliases (PEP 695), `list[X]` not `List[X]`, `TypedDict` for data shapes. whisperx has no stubs — its calls use `# type: ignore[no-untyped-call]`, isolated to `transcriber.py`.
 
 ### Environment
@@ -54,8 +73,11 @@ app/
 `.env` (copy from `.env.example`):
 ```
 API_KEY=your-secret-key
-WHISPERX_MODEL=base          # use large-v3 on GPU VM
-WHISPERX_DEVICE=cpu          # use cuda on GPU VM
+WHISPERX_MODEL=base              # use large-v3 on GPU VM
+WHISPERX_DEVICE=cpu              # use cuda on GPU VM
+SUPABASE_URL=https://...supabase.co
+SUPABASE_SERVICE_KEY=...         # service key, not anon — orchestrator persists sessions
+ALLOWED_ORIGINS=["http://localhost:5173"]
 ```
 
 `X-API-Key` header required on all `/analyze` calls.
@@ -66,9 +88,13 @@ WHISPERX_DEVICE=cpu          # use cuda on GPU VM
 |---|---|---|
 | RR-004 | Scaffold + stub `/analyze` | ✅ Done |
 | RR-021 | WhisperX ASR + forced alignment | ✅ Done |
-| RR-022 | Phil-IRI Miscue Classifier | ⬜ Next |
-| RR-023 | WPM + Scoring + Reading Level | ⬜ |
-| RR-020 | Real `/analyze` orchestrator | ⬜ Last |
+| RR-022 | Phil-IRI Miscue Classifier | ✅ Done |
+| RR-023 | WPM + Scoring + Reading Level | ✅ Done |
+| RR-020 | Real `/analyze` orchestrator | ✅ Done |
+| RR-030 | GO3 CV detector (MediaPipe) | ✅ Done |
+| RR-032 | GO3 prosody detector | ✅ Done |
+
+Current branch focus: `chore/add_logs_exception_handling` — logging + error-handling polish across the orchestrator and `/analyze` endpoint.
 
 ## Domain Rules (non-negotiable per SRS)
 
@@ -96,7 +122,16 @@ elif word_recognition_pct >= 91: reading_level = "Instructional"
 else:                             reading_level = "Frustration"
 ```
 
-**RR-020 orchestrator**: `asyncio.gather(go2, go3)` in parallel, `try/finally` for temp file cleanup, Supabase service key (not learner JWT), 500 + error code on pipeline failure (`TRANSCRIPTION_FAILED`, `SCORING_FAILED`).
+**RR-020 orchestrator** (`app/services/analysis_orchestrator.py`):
+- `tempfile.mkdtemp()` per request, `shutil.rmtree(..., ignore_errors=True)` in `finally`
+- ffmpeg extraction → `asyncio.gather(go2, go3)` → `ResultConsolidator.merge`
+- Empty `learner_id` skips the DB insert; the response still returns
+- Session insert failure is **non-fatal** — flips `db_save_failed=True` on the response, learner still gets their result
+- 500 + error code on pipeline failure:
+  - `EXTRACTION_FAILED` — ffmpeg / media extractor threw
+  - `ANALYSIS_FAILED` — either GO2 or GO3 pipeline threw
+  - `CONSOLIDATION_FAILED` — `ResultConsolidator.merge` raised ValueError
+- Errors return raw `{"error", "code"}` (not `{"detail": ...}`) via the custom exception handler in `main.py`
 
 ## Project Skills
 

@@ -14,7 +14,9 @@ N/A
 |---|---|---|
 | `MiscueType` | `Literal` type alias | The 7 valid miscue label strings |
 | `MiscueCounts` | `TypedDict` | Per-category count dict returned by `MiscueClassifier.classify()` |
-| `MiscueClassifierProtocol` | `Protocol` | Interface the pipeline depends on; concrete wired in `dependencies.py` at RR-020 |
+| `MiscueDetail` | `TypedDict` | One aligned word decision: `miscue_type`, `passage_word`/`transcript_word` (either may be `None`), `start`/`end` timing (`None` when no spoken word) |
+| `MiscueClassifierProtocol` | `Protocol` | Interface the pipeline depends on; `classify()` + `detail()`, both accept optional `proper_nouns: list[str]`; concrete wired in `dependencies.py` |
+| `MiscueReporterProtocol` | `Protocol` | Interface for printing `MiscueDetail`s after analysis; concrete (`MiscueReporter`) wired in `dependencies.py` |
 
 ## Diagrams
 | Diagram | Link |

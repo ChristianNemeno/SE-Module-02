@@ -28,4 +28,7 @@ class PassageRepository:
         return PassageRecord(
             text=str(data["text"]),
             word_count=int(data["word_count"]),  # type: ignore[arg-type]
+            # TODO: once the passages table has a `proper_nouns text[]` column, add it to the
+            # select() above and map it here so the classifier can exempt names from penalties.
+            proper_nouns=[],
         )

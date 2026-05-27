@@ -12,8 +12,10 @@ flowchart LR
     deps -->|per-call| ME[MediaExtractor]
     deps -->|per-call| PR[PassageRepository\nclient]
     deps -->|per-call| SR[SessionRepository\nclient]
+    deps -->|per-call| RPT[MiscueReporter]
+    deps -->|per-call| PNE[CapitalizationProperNounExtractor]
 
-    deps -->|constructs| GO2[GO2Pipeline\nT + C + S + PR]
+    deps -->|constructs| GO2[GO2Pipeline\nT + C + S + PR + RPT + PNE]
     deps -->|constructs| GO3[GO3Pipeline\nCV + PA]
     deps -->|constructs| ORC[AnalysisOrchestrator\nME + GO2 + GO3 + SR]
 
