@@ -226,11 +226,15 @@ def test_inflection_tolerance_treats_dropped_s_as_correct(clf: MiscueClassifier)
 
 
 def test_honorific_normalization_recovers_alignment(clf: MiscueClassifier) -> None:
-    """Filipino honorific+name ASR fusion ('mang ador' → 'mangador') aligns correctly."""
+    """Filipino honorific+name ASR fusion ('mang ador' → 'mangador') aligns correctly.
+
+    The passage compound 'Mang Ador' is treated as one unit, so counts.correct
+    reflects 3 events (one for the compound, plus 'said' and 'hi').
+    """
     passage = "Mang Ador said hi"
     words = [_w("mangador", start=0.0, end=0.6), _w("said"), _w("hi")]
-    counts = clf.classify(words, passage)
-    assert counts["correct"] == 4
+    counts = clf.classify(words, passage, proper_nouns=["Ador"])
+    assert counts["correct"] == 3
     assert counts["substitution"] == 0
     assert counts["mispronunciation"] == 0
 
@@ -250,6 +254,80 @@ def test_duration_flag_logs_but_does_not_change_class(
         counts = clf.classify(words, passage)
     assert counts["substitution"] == 1
     assert any("Likely ASR collapse" in r.message for r in caplog.records)
+
+
+def test_compound_fused_transcript_is_correct(clf: MiscueClassifier) -> None:
+    """ASR fused 'Mang Tinoy's' → 'mangtinoys' aligns to the compound and reports correct."""
+    passage = "Mang Tinoy's house"
+    words = [_w("mangtinoys", start=0.0, end=0.6), _w("house")]
+    counts = clf.classify(words, passage, proper_nouns=["Tinoy's"])
+    assert counts["correct"] == 2
+    assert counts["substitution"] == 0
+    assert counts["mispronunciation"] == 0
+
+
+def test_compound_phonetically_drifted_transcript_is_correct(clf: MiscueClassifier) -> None:
+    """ASR phonetic drift on a name ('alingjuaning's' → 'alingwanning's') stays correct.
+
+    Same proper-noun-leniency policy as 'anansi → nancy' — names are unreliable in ASR,
+    don't penalize the reader for what the model misspells.
+    """
+    passage = "Aling Juaning's stall"
+    words = [_w("alingwanning's", start=0.0, end=0.7), _w("stall")]
+    counts = clf.classify(words, passage, proper_nouns=["Juaning's"])
+    assert counts["correct"] == 2
+    assert counts["substitution"] == 0
+    assert counts["mispronunciation"] == 0
+
+
+def test_compound_already_split_clean_transcript_is_correct(clf: MiscueClassifier) -> None:
+    """When ASR emits the honorific and name as two clean tokens, they fuse into one event."""
+    passage = "Mang Ador said hi"
+    words = [
+        _w("mang", start=0.0, end=0.2),
+        _w("ador", start=0.2, end=0.5),
+        _w("said"),
+        _w("hi"),
+    ]
+    counts = clf.classify(words, passage, proper_nouns=["Ador"])
+    assert counts["correct"] == 3
+    assert counts["substitution"] == 0
+    assert counts["mispronunciation"] == 0
+
+
+def test_compound_two_token_stumble_is_substitution(clf: MiscueClassifier) -> None:
+    """Reader stumble ('mangti' + 'noise' for 'Mang Tinoy's') stays as a single substitution event."""
+    passage = "Mang Tinoy's house"
+    words = [
+        _w("mangti", start=0.0, end=0.3),
+        _w("noise", start=0.3, end=0.6),
+        _w("house"),
+    ]
+    details = clf.detail(words, passage, proper_nouns=["Tinoy's"])
+    subs = [d for d in details if d["miscue_type"] == "substitution"]
+    assert len(subs) == 1
+    assert subs[0]["passage_word"] == "mang tinoy's"
+    assert subs[0]["transcript_word"] == "mangti noise"
+
+
+def test_compound_passage_word_uses_space_separated_display(clf: MiscueClassifier) -> None:
+    """MiscueDetail.passage_word reports the original space form for compounds, not the merged canon."""
+    passage = "Mang Ador said hi"
+    words = [_w("mangador", start=0.0, end=0.5), _w("said"), _w("hi")]
+    details = clf.detail(words, passage, proper_nouns=["Ador"])
+    compound_events = [d for d in details if d["passage_word"] == "mang ador"]
+    assert len(compound_events) == 1
+    assert compound_events[0]["miscue_type"] == "correct"
+    assert "mangador" not in [d["passage_word"] for d in details]
+
+
+def test_compound_merge_requires_proper_noun_next(clf: MiscueClassifier) -> None:
+    """A honorific stem followed by a non-proper-noun word stays unmerged (e.g. 'kuya ate breakfast')."""
+    passage = "Kuya ate breakfast"  # 'ate' is the verb, not a name
+    words = [_w("kuya"), _w("ate"), _w("breakfast")]
+    counts = clf.classify(words, passage, proper_nouns=[])
+    assert counts["correct"] == 3
+    assert counts["substitution"] == 0
 
 
 def test_transcript_punctuation_does_not_block_correct_match(clf: MiscueClassifier) -> None:
@@ -283,11 +361,11 @@ def test_detail_keeps_raw_transcript_word_with_punctuation(clf: MiscueClassifier
 
 
 def test_honorific_normalization_handles_punctuation(clf: MiscueClassifier) -> None:
-    """Honorific fusion + trailing punctuation ('mangador,') still splits and aligns correctly."""
+    """Honorific fusion + trailing punctuation ('mangador,') aligns to the compound."""
     passage = "Mang Ador said hi"
     words = [_w("mangador,", start=0.0, end=0.6), _w("said"), _w("hi")]
-    counts = clf.classify(words, passage)
-    assert counts["correct"] == 4
+    counts = clf.classify(words, passage, proper_nouns=["Ador"])
+    assert counts["correct"] == 3
     assert counts["substitution"] == 0
     assert counts["mispronunciation"] == 0
 

@@ -179,17 +179,17 @@ Passage 2 — correct    (70 passage words, 68 transcript tokens)
 Proper nouns detected: ['lisa', 'mama', 'taho']
 
 Counts:
-  correct              64
+  correct              65
   mispronunciation     0
-  substitution         3  (error)
+  substitution         2  (error)
   omission             0
   insertion            0
   repetition           1  (error)
-  TOTAL ERRORS         4
+  TOTAL ERRORS         3
 
 Scoring:
   WPM:                149.8
-  Word recognition %: 94.3
+  Word recognition %: 95.7
   Reading level:      Instructional
 
 Events (68):
@@ -257,7 +257,7 @@ Events (68):
   [correct         ] passage='now'                          heard='now,'                         (25.85s–26.05s)
   [correct         ] passage='said'                         heard='said'                         (26.43s–26.63s)
   [correct         ] passage='mama'                         heard='mama.'                        (26.71s–27.09s)
-  [substitution    ] passage='you re'                       heard="you're"                       (27.67s–27.87s)
+  [correct         ] passage="you're"                       heard="you're"                       (27.67s–27.87s)
   [correct         ] passage='welcome'                      heard='welcome'                      (27.89s–28.31s)
   [correct         ] passage='mama'                         heard='mama.'                        (28.37s–28.67s)
   [repetition      ] passage=—                              heard='tahoe'                        (13.36s–14.68s)
@@ -268,18 +268,18 @@ Passage 2 — incorrect  (70 passage words, 70 transcript tokens)
 Proper nouns detected: ['lisa', 'mama', 'taho']
 
 Counts:
-  correct              64
+  correct              65
   mispronunciation     1  (error)
-  substitution         2  (error)
+  substitution         1  (error)
   omission             1  (error)
   insertion            1  (error)
   repetition           2  (error)
-  TOTAL ERRORS         7
+  TOTAL ERRORS         6
 
 Scoring:
   WPM:                136.3
-  Word recognition %: 90.0
-  Reading level:      Frustration
+  Word recognition %: 91.4
+  Reading level:      Instructional
 
 Events (71):
   [correct         ] passage='mama'                         heard='mama'                         (0.53s–0.87s)
@@ -348,7 +348,7 @@ Events (71):
   [correct         ] passage='said'                         heard='said'                         (29.05s–29.25s)
   [insertion       ] passage=—                              heard='by'                           (29.29s–29.45s)
   [correct         ] passage='mama'                         heard='mama.'                        (29.49s–29.87s)
-  [substitution    ] passage='you re'                       heard="you're"                       (30.31s–30.49s)
+  [correct         ] passage="you're"                       heard="you're"                       (30.31s–30.49s)
   [correct         ] passage='welcome'                      heard='welcome,'                     (30.51s–30.91s)
   [correct         ] passage='mama'                         heard='mama.'                        (30.95s–31.35s)
   [repetition      ] passage=—                              heard='man,'                         (12.88s–13.90s)
@@ -444,7 +444,7 @@ Events (85):
   [correct         ] passage='her'                          heard='her'                          (23.94s–24.06s)
   [correct         ] passage='way'                          heard='way'                          (24.10s–24.26s)
   [correct         ] passage='to'                           heard='to'                           (24.30s–24.38s)
-  [substitution    ] passage='beetle s'                     heard='the beetles'                  (24.42s–24.92s)
+  [substitution    ] passage="beetle's"                     heard='the beetles'                  (24.42s–24.92s)
   [correct         ] passage='home'                         heard='home,'                        (24.98s–25.28s)
   [correct         ] passage='she'                          heard='she'                          (25.86s–26.04s)
   [correct         ] passage='saw'                          heard='saw'                          (26.12s–26.34s)
@@ -466,17 +466,17 @@ Passage 3 — incorrect  (87 passage words, 89 transcript tokens)
 Proper nouns detected: ['anansi', 'this']
 
 Counts:
-  correct              80
+  correct              81
   mispronunciation     1  (error)
-  substitution         3  (error)
+  substitution         2  (error)
   omission             1  (error)
   insertion            1  (error)
   repetition           1  (error)
-  TOTAL ERRORS         7
+  TOTAL ERRORS         6
 
 Scoring:
   WPM:                176.9
-  Word recognition %: 92.0
+  Word recognition %: 93.1
   Reading level:      Instructional
 
 Events (87):
@@ -550,7 +550,7 @@ Events (87):
   [correct         ] passage='her'                          heard='her'                          (23.56s–23.70s)
   [correct         ] passage='way'                          heard='way,'                         (23.76s–24.00s)
   [correct         ] passage='to'                           heard='to'                           (24.72s–24.84s)
-  [substitution    ] passage='beetle s'                     heard='beetles'                      (24.88s–25.22s)
+  [correct         ] passage="beetle's"                     heard='beetles'                      (24.88s–25.22s)
   [correct         ] passage='home'                         heard='home,'                        (25.24s–25.50s)
   [correct         ] passage='she'                          heard='she'                          (26.08s–26.26s)
   [correct         ] passage='saw'                          heard='saw'                          (26.34s–26.58s)
@@ -571,23 +571,23 @@ Events (87):
 ================================================================================
 Passage 4 — correct    (83 passage words, 73 transcript tokens)
 ================================================================================
-Proper nouns detected: ['ador', 'aling', 'juaning', 'mang', 'manuel', 'saturday', 'tinoy', 'tita']
+Proper nouns detected: ['ador', 'aling', "juaning's", 'mang', 'manuel', 'saturday', "tinoy's", "tita's"]
 
 Counts:
   correct              73
   mispronunciation     0
-  substitution         3  (error)
+  substitution         0
   omission             1  (error)
   insertion            0
   repetition           0
-  TOTAL ERRORS         4
+  TOTAL ERRORS         1
 
 Scoring:
   WPM:                154.1
-  Word recognition %: 95.2
-  Reading level:      Instructional
+  Word recognition %: 98.8
+  Reading level:      Independent
 
-Events (77):
+Events (74):
   [correct         ] passage='every'                        heard='every'                        (0.87s–1.07s)
   [correct         ] passage='saturday'                     heard='saturday,'                    (1.13s–1.67s)
   [correct         ] passage='manuel'                       heard='manuel'                       (2.05s–2.51s)
@@ -597,13 +597,12 @@ Events (77):
   [correct         ] passage='with'                         heard='with'                         (3.43s–3.57s)
   [correct         ] passage='his'                          heard='his'                          (3.61s–3.73s)
   [correct         ] passage='father'                       heard='father,'                      (3.79s–4.15s)
-  [correct         ] passage='mang'                         heard='mang'                         (5.00s–5.31s)
-  [correct         ] passage='ador'                         heard='ador'                         (5.31s–5.62s)
+  [correct         ] passage='mang ador'                    heard='mangador.'                    (5.00s–5.62s)
   [correct         ] passage='they'                         heard='they'                         (6.16s–6.32s)
   [correct         ] passage='always'                       heard='always'                       (6.38s–6.68s)
   [correct         ] passage='pass'                         heard='pass'                         (6.78s–7.02s)
   [correct         ] passage='by'                           heard='by'                           (7.08s–7.20s)
-  [substitution    ] passage='aling juaning s'              heard="alingwanning's"               (7.34s–8.08s)
+  [correct         ] passage="aling juaning's"              heard="alingwanning's"               (7.34s–8.08s)
   [correct         ] passage='stall'                        heard='stall'                        (8.26s–8.64s)
   [correct         ] passage='to'                           heard='to'                           (8.68s–8.78s)
   [correct         ] passage='buy'                          heard='buy'                          (8.82s–9.00s)
@@ -611,19 +610,18 @@ Events (77):
   [correct         ] passage='they'                         heard='they'                         (9.96s–10.08s)
   [correct         ] passage='go'                           heard='go'                           (10.12s–10.26s)
   [correct         ] passage='to'                           heard='to'                           (10.30s–10.40s)
-  [substitution    ] passage='mang tinoy s'                 heard='mangtinoys'                   (10.44s–11.20s)
+  [correct         ] passage="mang tinoy's"                 heard='mangtinoys'                   (10.44s–11.20s)
   [correct         ] passage='for'                          heard='for'                          (11.30s–11.46s)
   [correct         ] passage='fresh'                        heard='fresh'                        (11.52s–11.76s)
   [correct         ] passage='vegetables'                   heard='vegetables.'                  (11.82s–12.42s)
   [correct         ] passage='they'                         heard='they'                         (12.96s–13.08s)
   [correct         ] passage='also'                         heard='also'                         (13.12s–13.38s)
   [correct         ] passage='visit'                        heard='visit'                        (13.44s–13.72s)
-  [substitution    ] passage='aling tita s'                 heard='alintita'                     (13.80s–14.46s)
+  [correct         ] passage="aling tita's"                 heard='alintita'                     (13.80s–14.46s)
   [correct         ] passage='seafood'                      heard='seafood'                      (14.50s–14.92s)
   [correct         ] passage='section'                      heard='section.'                     (14.96s–15.44s)
   [correct         ] passage='whenever'                     heard='whenever'                     (16.18s–16.59s)
-  [correct         ] passage='mang'                         heard='mang'                         (16.62s–16.88s)
-  [correct         ] passage='ador'                         heard='ador'                         (16.88s–17.12s)
+  [correct         ] passage='mang ador'                    heard='mangador'                     (16.62s–17.12s)
   [correct         ] passage='buys'                         heard='buys'                         (17.18s–17.34s)
   [correct         ] passage='something'                    heard='something,'                   (17.45s–17.91s)
   [correct         ] passage='manuel'                       heard='manuel'                       (18.37s–18.79s)
@@ -639,8 +637,7 @@ Events (77):
   [correct         ] passage='for'                          heard='for'                          (20.99s–21.13s)
   [correct         ] passage='lunch'                        heard='lunch.'                       (21.19s–21.51s)
   [correct         ] passage='today'                        heard='today,'                       (22.09s–22.47s)
-  [correct         ] passage='mang'                         heard='mang'                         (22.95s–23.28s)
-  [correct         ] passage='ador'                         heard='ador'                         (23.28s–23.61s)
+  [correct         ] passage='mang ador'                    heard='mangador'                     (22.95s–23.61s)
   [correct         ] passage='bought'                       heard='bought'                       (23.75s–23.95s)
   [correct         ] passage='tamarind'                     heard='tamarind,'                    (23.97s–24.57s)
   [correct         ] passage='tomatoes'                     heard='tomatoes,'                    (24.95s–25.63s)
@@ -669,23 +666,23 @@ Events (77):
 ================================================================================
 Passage 4 — incorrect  (83 passage words, 77 transcript tokens)
 ================================================================================
-Proper nouns detected: ['ador', 'aling', 'juaning', 'mang', 'manuel', 'saturday', 'tinoy', 'tita']
+Proper nouns detected: ['ador', 'aling', "juaning's", 'mang', 'manuel', 'saturday', "tinoy's", "tita's"]
 
 Counts:
-  correct              71
+  correct              70
   mispronunciation     0
-  substitution         5  (error)
+  substitution         3  (error)
   omission             1  (error)
   insertion            1  (error)
   repetition           0
-  TOTAL ERRORS         7
+  TOTAL ERRORS         5
 
 Scoring:
   WPM:                144.6
-  Word recognition %: 91.6
+  Word recognition %: 94.0
   Reading level:      Instructional
 
-Events (78):
+Events (75):
   [correct         ] passage='every'                        heard='every'                        (0.77s–0.99s)
   [correct         ] passage='saturday'                     heard='saturday,'                    (1.03s–1.63s)
   [correct         ] passage='manuel'                       heard='manuel'                       (1.93s–2.39s)
@@ -695,13 +692,12 @@ Events (78):
   [correct         ] passage='with'                         heard='with'                         (3.19s–3.31s)
   [correct         ] passage='his'                          heard='his'                          (3.35s–3.49s)
   [correct         ] passage='father'                       heard='father,'                      (3.53s–3.93s)
-  [correct         ] passage='mang'                         heard='mang'                         (4.25s–4.61s)
-  [correct         ] passage='ador'                         heard='ador'                         (4.61s–4.96s)
+  [correct         ] passage='mang ador'                    heard='mangador.'                    (4.25s–4.96s)
   [correct         ] passage='they'                         heard='they'                         (5.60s–5.76s)
   [correct         ] passage='always'                       heard='always'                       (5.84s–6.14s)
   [correct         ] passage='pass'                         heard='pass'                         (6.22s–6.48s)
   [correct         ] passage='by'                           heard='by'                           (6.54s–6.68s)
-  [substitution    ] passage='aling juaning s'              heard="aling-wanning's"              (6.82s–7.54s)
+  [correct         ] passage="aling juaning's"              heard="aling-wanning's"              (6.82s–7.54s)
   [correct         ] passage='stall'                        heard='stall'                        (7.70s–8.06s)
   [correct         ] passage='to'                           heard='to'                           (8.10s–8.20s)
   [correct         ] passage='buy'                          heard='buy'                          (8.22s–8.42s)
@@ -709,19 +705,18 @@ Events (78):
   [correct         ] passage='they'                         heard='they'                         (9.36s–9.50s)
   [correct         ] passage='go'                           heard='go'                           (9.54s–9.68s)
   [correct         ] passage='to'                           heard='to'                           (9.76s–9.84s)
-  [substitution    ] passage='mang tinoy s'                 heard='mangti noise'                 (9.88s–10.54s)
+  [substitution    ] passage="mang tinoy's"                 heard='mangti noise'                 (9.88s–10.54s)
   [correct         ] passage='for'                          heard='for'                          (10.64s–10.82s)
   [correct         ] passage='fresh'                        heard='fresh'                        (10.90s–11.18s)
   [correct         ] passage='vegetables'                   heard='vegetables.'                  (11.30s–11.90s)
   [correct         ] passage='they'                         heard='they'                         (12.54s–12.68s)
   [correct         ] passage='also'                         heard='also'                         (12.74s–13.00s)
   [correct         ] passage='visit'                        heard='visit'                        (13.08s–13.36s)
-  [substitution    ] passage='aling tita s'                 heard="aling-tita's"                 (13.46s–14.16s)
+  [correct         ] passage="aling tita's"                 heard="aling-tita's"                 (13.46s–14.16s)
   [correct         ] passage='seafood'                      heard='seafood.'                     (14.36s–14.86s)
   [omission        ] passage='section'                      heard=—                              (—)
   [correct         ] passage='whenever'                     heard='whenever'                     (15.66s–16.06s)
-  [correct         ] passage='mang'                         heard='mang'                         (16.08s–16.36s)
-  [correct         ] passage='ador'                         heard='ador'                         (16.36s–16.64s)
+  [correct         ] passage='mang ador'                    heard='mangador'                     (16.08s–16.64s)
   [correct         ] passage='buys'                         heard='buys'                         (16.70s–16.95s)
   [substitution    ] passage='something'                    heard='so many things,'              (17.09s–17.85s)
   [correct         ] passage='manuel'                       heard='manuel'                       (18.45s–18.91s)
@@ -737,8 +732,7 @@ Events (78):
   [correct         ] passage='for'                          heard='for'                          (21.79s–21.95s)
   [correct         ] passage='lunch'                        heard='lunch.'                       (21.99s–22.31s)
   [correct         ] passage='today'                        heard='today,'                       (22.99s–23.39s)
-  [correct         ] passage='mang'                         heard='mang'                         (23.91s–24.23s)
-  [correct         ] passage='ador'                         heard='ador'                         (24.23s–24.55s)
+  [correct         ] passage='mang ador'                    heard='mangador'                     (23.91s–24.55s)
   [correct         ] passage='bought'                       heard='bought'                       (24.61s–24.87s)
   [correct         ] passage='tamarind'                     heard='tamarin,'                     (24.93s–25.53s)
   [correct         ] passage='tomatoes'                     heard='tomatoes,'                    (25.91s–26.59s)

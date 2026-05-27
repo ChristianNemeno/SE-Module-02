@@ -11,6 +11,7 @@ _COLLAPSE_DURATION_THRESHOLD = 0.6
 _HONORIFIC_STEMS: frozenset[str] = frozenset({"mang", "aling", "ate", "kuya", "lola", "lolo"})
 _INFLECTION_SUFFIXES: tuple[str, ...] = ("ing", "es", "ed", "s", "d")
 _MAX_REPETITION_PHRASE_LEN = 3
+_TRANSCRIPT_MERGE_MAX_DIST = 1
 _CANON_RE = re.compile(r"[a-z']+")
 
 logger = logging.getLogger(__name__)
@@ -83,22 +84,33 @@ class MiscueClassifier:
         """Single source of truth — aligns passage to transcript and yields event records."""
         passage_tokens = self._tokenize(passage_text)
         proper_set = {w.lower() for w in (proper_nouns or [])}
-        normalized = self._normalize_honorifics(transcript_words, passage_tokens)
+        passage_canons, passage_displays, compound_set = self._merge_passage_compounds(
+            passage_tokens, proper_set
+        )
+        normalized = self._merge_transcript_compounds(transcript_words, compound_set)
         rep_details, deduped = self._detect_repetitions(normalized)
         deduped_canons = [_canon(w["word"]) for w in deduped]
 
         details: list[MiscueDetail] = []
-        matcher = SequenceMatcher(None, passage_tokens, deduped_canons, autojunk=False)
+        matcher = SequenceMatcher(None, passage_canons, deduped_canons, autojunk=False)
         for tag, i1, i2, j1, j2 in matcher.get_opcodes():
             if tag == "equal":
                 for k in range(i2 - i1):
-                    details.append(self._spoken("correct", passage_tokens[i1 + k], deduped[j1 + k]))
+                    details.append(
+                        self._spoken("correct", passage_displays[i1 + k], deduped[j1 + k])
+                    )
             elif tag == "replace":
                 details.append(
-                    self._replace_event(passage_tokens[i1:i2], deduped[j1:j2], proper_set)
+                    self._replace_event(
+                        passage_canons[i1:i2],
+                        passage_displays[i1:i2],
+                        deduped[j1:j2],
+                        proper_set,
+                        compound_set,
+                    )
                 )
             elif tag == "delete":
-                details.append(self._omission_event(passage_tokens[i1:i2]))
+                details.append(self._omission_event(passage_displays[i1:i2]))
             elif tag == "insert":
                 details.append(self._insertion_event(deduped[j1:j2]))
 
@@ -107,34 +119,41 @@ class MiscueClassifier:
 
     def _replace_event(
         self,
-        p_words: list[str],
+        p_canons: list[str],
+        p_displays: list[str],
         t_segments: list[WordSegment],
         proper_set: set[str],
+        compound_set: set[str],
     ) -> MiscueDetail:
         """Collapses a replace opcode into one event — 1↔1 may be correct/mispron, else substitution."""
-        if len(p_words) == 1 and len(t_segments) == 1:
+        if len(p_canons) == 1 and len(t_segments) == 1:
             seg = t_segments[0]
-            label = self._classify_pair(p_words[0], seg["word"], proper_set)
-            return self._spoken(label, p_words[0], seg)
+            is_compound = p_canons[0] in compound_set
+            label = self._classify_pair(p_canons[0], seg["word"], proper_set, is_compound)
+            return self._spoken(label, p_displays[0], seg)
         self._flag_likely_collapse(t_segments)
         return MiscueDetail(
             miscue_type="substitution",
-            passage_word=" ".join(p_words),
+            passage_word=" ".join(p_displays),
             transcript_word=" ".join(s["word"] for s in t_segments),
             start=t_segments[0]["start"] if t_segments else None,
             end=t_segments[-1]["end"] if t_segments else None,
         )
 
     def _classify_pair(
-        self, passage_word: str, transcript_word: str, proper_set: set[str]
+        self,
+        passage_canon: str,
+        transcript_word: str,
+        proper_set: set[str],
+        is_compound: bool,
     ) -> MiscueType:
-        """Labels a single-word mismatch with proper-noun and inflection leniency."""
+        """Labels a single-word mismatch with proper-noun, compound, and inflection leniency."""
         canon = _canon(transcript_word)
-        if passage_word in proper_set:
-            return "correct"  # ASR can't reliably spell names — don't penalize on edit distance
-        if self._is_inflection_variant(passage_word, canon):
-            return "correct"  # L2 morphological reductions (-ed, -s, -ing) — not a true miscue
-        dist = _levenshtein(passage_word, canon)
+        if passage_canon in proper_set or is_compound:
+            return "correct"  # ASR can't reliably spell names; compounds carry one — don't penalize.
+        if self._is_inflection_variant(passage_canon, canon):
+            return "correct"  # L2 morphological reductions (-ed, -s, -ing) — not a true miscue.
+        dist = _levenshtein(passage_canon, canon)
         if dist <= 1:
             return "correct"
         if dist <= _MISPRONUNCIATION_MAX_DIST:
@@ -208,64 +227,94 @@ class MiscueClassifier:
                     seg["end"],
                 )
 
-    def _normalize_honorifics(
-        self, words: list[WordSegment], passage_tokens: list[str]
-    ) -> list[WordSegment]:
-        """Splits transcript tokens that fused a Filipino honorific stem with a name.
+    def _merge_passage_compounds(
+        self, passage_tokens: list[str], proper_set: set[str]
+    ) -> tuple[list[str], list[str], set[str]]:
+        """Merge Filipino honorific+name pairs in the passage into one canonical token.
 
-        Only splits when the trailing remainder also matches a passage token, so we don't
-        damage real words that happen to start with a stem (e.g. 'kuya' as a standalone).
+        Returns (canons, displays, compound_canons): canons feed SequenceMatcher, displays
+        carry the original space-separated form for MiscueDetail output, compound_canons
+        lists the merged forms so the transcript-side merge knows what to look for.
         """
-        passage_set = set(passage_tokens)
+        canons: list[str] = []
+        displays: list[str] = []
+        compound_canons: set[str] = set()
+        i = 0
+        n = len(passage_tokens)
+        while i < n:
+            tok = passage_tokens[i]
+            if i + 1 < n and tok in _HONORIFIC_STEMS and passage_tokens[i + 1] in proper_set:
+                merged_canon = tok + passage_tokens[i + 1]
+                canons.append(merged_canon)
+                displays.append(f"{tok} {passage_tokens[i + 1]}")
+                compound_canons.add(merged_canon)
+                i += 2
+            else:
+                canons.append(tok)
+                displays.append(tok)
+                i += 1
+        return canons, displays, compound_canons
+
+    def _merge_transcript_compounds(
+        self, words: list[WordSegment], compound_canons: set[str]
+    ) -> list[WordSegment]:
+        """Fuse consecutive transcript tokens whose joined canon closely matches a compound.
+
+        Strict edit-distance threshold (≤ 1) — only rescues the case where the ASR cleanly
+        emitted the honorific and name as two separate tokens. Genuine reader stumbles
+        (joined canon farther from any compound) stay as two tokens so the 1↔2 replace
+        opcode falls through to the span-substitution rule.
+        """
+        if not compound_canons:
+            return list(words)
         out: list[WordSegment] = []
-        for seg in words:
-            stem, remainder = self._split_honorific(_canon(seg["word"]), passage_set)
-            if stem is None or remainder is None:
-                out.append(seg)
-                continue
-            mid = self._split_timing(seg, len(stem), len(stem) + len(remainder))
-            out.append(WordSegment(word=stem, start=seg["start"], end=mid, score=seg["score"]))
-            out.append(WordSegment(word=remainder, start=mid, end=seg["end"], score=seg["score"]))
+        i = 0
+        n = len(words)
+        while i < n:
+            if i + 1 < n:
+                joined = _canon(words[i]["word"]) + _canon(words[i + 1]["word"])
+                if self._matches_any_compound(joined, compound_canons):
+                    a, b = words[i], words[i + 1]
+                    out.append(
+                        WordSegment(
+                            word=f"{a['word']} {b['word']}",
+                            start=a["start"],
+                            end=b["end"],
+                            score=min(a["score"], b["score"]),
+                        )
+                    )
+                    i += 2
+                    continue
+            out.append(words[i])
+            i += 1
         return out
 
-    def _split_honorific(
-        self, canon_token: str, passage_set: set[str]
-    ) -> tuple[str | None, str | None]:
-        """Returns (stem, remainder) if the canonical token is an honorific fusion the passage expects."""
-        for stem in _HONORIFIC_STEMS:
-            if not canon_token.startswith(stem) or len(canon_token) <= len(stem):
-                continue
-            if stem not in passage_set:
-                continue
-            remainder = canon_token[len(stem):]
-            if remainder in passage_set:
-                return stem, remainder
-        return None, None
-
-    def _split_timing(self, seg: WordSegment, left_len: int, total_len: int) -> float:
-        """Linear interpolation of the split point within the original token's duration."""
-        if total_len <= 0:
-            return seg["start"]
-        ratio = left_len / total_len
-        return seg["start"] + (seg["end"] - seg["start"]) * ratio
+    def _matches_any_compound(self, joined_canon: str, compound_canons: set[str]) -> bool:
+        """True if joined_canon is within the strict merge threshold of any compound."""
+        if joined_canon in compound_canons:
+            return True
+        for c in compound_canons:
+            if _levenshtein(joined_canon, c) <= _TRANSCRIPT_MERGE_MAX_DIST:
+                return True
+        return False
 
     def _spoken(
-        self, miscue_type: MiscueType, passage_word: str, seg: WordSegment
+        self, miscue_type: MiscueType, passage_display: str, seg: WordSegment
     ) -> MiscueDetail:
-        """Builds a detail for a passage word that was actually spoken (carries timing)."""
+        """Builds a detail for a passage word (or compound) that was actually spoken."""
         return MiscueDetail(
             miscue_type=miscue_type,
-            passage_word=passage_word,
+            passage_word=passage_display,
             transcript_word=seg["word"],
             start=seg["start"],
             end=seg["end"],
         )
 
-    def _omission_event(self, p_words: list[str]) -> MiscueDetail:
+    def _omission_event(self, p_displays: list[str]) -> MiscueDetail:
         """Collapses a contiguous omitted passage span into one event."""
         return MiscueDetail(
             miscue_type="omission",
-            passage_word=" ".join(p_words),
+            passage_word=" ".join(p_displays),
             transcript_word=None,
             start=None,
             end=None,
@@ -282,5 +331,10 @@ class MiscueClassifier:
         )
 
     def _tokenize(self, text: str) -> list[str]:
-        """Lowercases and extracts word tokens, strips punctuation."""
-        return [w.lower() for w in re.findall(r"[a-zA-Z']+", text)]
+        """Lowercases and extracts word tokens, strips punctuation.
+
+        Normalizes curly apostrophes (U+2019) to ASCII so possessives like 'Juaning's'
+        survive as one token rather than splitting into ['juaning', 's'].
+        """
+        normalized = text.replace("’", "'")
+        return [w.lower() for w in re.findall(r"[a-zA-Z']+", normalized)]
