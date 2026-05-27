@@ -33,7 +33,11 @@ async def _pipeline_error_handler(request: Request, exc: HTTPException) -> JSONR
 
 def create_app() -> FastAPI:
     """App factory — creates and configures the FastAPI instance."""
-    logging.getLogger("app").setLevel(logging.INFO)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        force=True,
+    )
 
     settings = get_settings()
     app = FastAPI(title="ReadRight GO2 API", lifespan=lifespan)

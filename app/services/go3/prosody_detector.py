@@ -8,7 +8,7 @@ import parselmouth  # type: ignore[import-untyped]
 from app.models.prosody_detector import ProsodyFlags
 
 _INAUDIBLE_RMS_THRESHOLD = 0.01
-_MONOTONE_F0_STD_THRESHOLD = 20.0       # Hz
+_MONOTONE_F0_STD_THRESHOLD = 30.0       # Hz — empirical: humans trying to read flat sit ~25-40Hz (lexical stress + breath groups); expressive reading 38-69Hz; raw neural TTS 15-25Hz. 30Hz catches deliberate flat human speech while leaving normal expressive reading above the bar.
 _MIN_DURATION_SECONDS = 5.0
 _MIN_VOICED_FRAMES = 10
 _SAMPLE_RATE = 16000
