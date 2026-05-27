@@ -72,7 +72,7 @@ class FakeMiscueClassifier:
         """Return zero-error miscue counts."""
         return MiscueCounts(
             correct=2, mispronunciation=0, substitution=0,
-            omission=0, insertion=0, repetition=0, refusal_to_pronounce=0,
+            omission=0, insertion=0, repetition=0,
         )
 
     def detail(
@@ -241,7 +241,7 @@ def client(fake_session_repo: FakeSessionRepository) -> TestClient:
 # ---------------------------------------------------------------------------
 
 def test_valid_request_returns_200_with_all_fields(client: TestClient) -> None:
-    """Happy path — 200, all 16 AssessmentResult fields, db_save_failed=False."""
+    """Happy path — 200, all 15 AssessmentResult fields, db_save_failed=False."""
     resp = _post(client)
     assert resp.status_code == 200
     body: dict[str, Any] = resp.json()
@@ -249,7 +249,7 @@ def test_valid_request_returns_200_with_all_fields(client: TestClient) -> None:
     assert result.wpm == 80.0
     assert result.reading_level == "Independent"
     assert result.db_save_failed is False
-    assert len(body) == 16
+    assert len(body) == 15
 
 
 def test_invalid_api_key_returns_401() -> None:

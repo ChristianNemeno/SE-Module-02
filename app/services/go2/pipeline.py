@@ -48,7 +48,6 @@ class GO2Pipeline:
             omission=tally["omission"],
             insertion=tally["insertion"],
             repetition=tally["repetition"],
-            refusal_to_pronounce=tally["refusal_to_pronounce"],
         )
         self._reporter.report(passage_id, details)
 
@@ -63,5 +62,4 @@ class GO2Pipeline:
             omission=miscues["omission"],
             insertion=miscues["insertion"],
             repetition=miscues["repetition"],
-            refusal_to_pronounce=miscues["refusal_to_pronounce"],
         )

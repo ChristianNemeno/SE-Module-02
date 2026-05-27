@@ -98,22 +98,22 @@ Current branch focus: `chore/add_logs_exception_handling` — logging + error-ha
 
 ## Domain Rules (non-negotiable per SRS)
 
-**Phil-IRI Miscue Taxonomy** (RR-022):
-- `correct` — edit distance ≤ 1
-- `mispronunciation` — phonetically similar, edit distance 2–3
-- `substitution` — completely different word
-- `omission` — passage word absent from transcript
-- `insertion` — extra transcript word not in passage
-- `repetition` — same word consecutive in transcript
-- `refusal_to_pronounce` — no clear transcription + score < 0.3
-- On ambiguous classification: prefer conservative label (mispronunciation > substitution)
+**Phil-IRI Miscue Taxonomy** (RR-022) — 5 categories only:
+- `correct` — edit distance ≤ 1 (also: dropped morphological inflections `-ed`, `-s`, `-es`, `-d`, `-ing`; proper nouns from the passage's whitelist)
+- `mispronunciation` — phonetically similar, edit distance 2–3 (single-token only)
+- `substitution` — completely different word OR an entire N↔M `replace` span (1 passage word → multi-token phrase counts as ONE substitution event)
+- `omission` — passage word(s) absent from transcript; contiguous omitted run = ONE event with the joined phrase
+- `insertion` — extra transcript word(s) not in passage; contiguous insertion = ONE event with the joined phrase
+- `repetition` — same word OR phrase repeated consecutively in transcript; the repeated bigram/trigram is ONE event
+- On ambiguous single-word classification: prefer conservative label (mispronunciation > substitution)
+- ASR robustness: Filipino honorific stems (`mang`, `aling`, `ate`, `kuya`, `lola`, `lolo`) fused with a name in the transcript are split before alignment if both halves appear in the passage. A single transcript token with duration > 0.6s in a substitution emits a warning (likely ASR multi-word collapse).
 
 **WPM + Scoring Formulas** (RR-023):
 ```python
 wpm = total_passage_words / (last_word_end - first_word_start) * 60
 
-# Error miscues = mispronunciation + substitution + omission + refusal_to_pronounce
-# NOT insertion or repetition
+# Error miscues = all 5 categories — each event counts as 1 error
+# (mispronunciation + substitution + omission + insertion + repetition)
 word_recognition_pct = (total_words - error_count) / total_words * 100
 
 # Reading level — boundary ties go to the LOWER classification

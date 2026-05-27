@@ -15,7 +15,6 @@ class SessionRecord(TypedDict):
     omission: int
     insertion: int
     repetition: int
-    refusal_to_pronounce: int
     finger_pointing: bool
     loss_of_place: bool
     monotone_reading: bool
