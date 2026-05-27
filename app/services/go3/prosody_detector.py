@@ -1,4 +1,5 @@
 # app/services/go3/prosody_detector.py
+import logging
 from typing import Any
 
 import librosa  # type: ignore[import-untyped]
@@ -14,8 +15,11 @@ _MIN_VOICED_FRAMES = 10
 _SAMPLE_RATE = 16000
 _SILENCE_RMS_THRESHOLD: float = 0.015      # frames below this = silence; above noise floor (~0.005), below soft speech (~0.03)
 _SILENCE_MIN_FRAMES: int = 6               # min consecutive silent frames to count as inter-word gap (~192ms at hop=512, sr=16000)
-_WORD_BY_WORD_GAP_THRESHOLD: float = 0.35  # mean gap > 350ms = word-by-word; fluent ceiling ~200ms, robotic floor ~480ms
-_MIN_GAP_EVENTS: int = 2                   # need ≥2 interior gaps to compute a meaningful mean
+_MEDIUM_GAP_MAX: float = 0.5               # upper bound on "within-sentence" word gap (s); longer = sentence break / breath
+_WORD_BY_WORD_RATE_THRESHOLD: float = 0.2  # medium gaps / total audio duration > 0.2/s = word-by-word; calibrated on fluent (0.11/s) vs WBW (0.30/s) fixtures
+_MIN_GAP_EVENTS: int = 2                   # need ≥2 interior gaps to compute a meaningful rate
+
+_LOG = logging.getLogger(__name__)
 
 
 def _default_flags() -> ProsodyFlags:
@@ -82,8 +86,33 @@ class ProsodyAmplitudeDetector:
         real_gaps: np.ndarray = gap_lengths[gap_lengths >= _SILENCE_MIN_FRAMES]
 
         if len(real_gaps) < _MIN_GAP_EVENTS:
+            _LOG.info(
+                "word_by_word diagnostics: raw_runs=%d interior_gaps=%d (need >=%d) -> decision=False (insufficient gaps)",
+                n_gaps, len(real_gaps), _MIN_GAP_EVENTS,
+            )
             return False
 
         frame_duration: float = hop_length / float(sr)
         gap_durations: np.ndarray = real_gaps * frame_duration
-        return float(np.mean(gap_durations)) > _WORD_BY_WORD_GAP_THRESHOLD
+        total_duration: float = n_frames * frame_duration
+        medium_count: int = int(np.sum(gap_durations <= _MEDIUM_GAP_MAX))
+        medium_rate: float = medium_count / total_duration if total_duration > 0 else 0.0
+        decision: bool = medium_rate > _WORD_BY_WORD_RATE_THRESHOLD
+        _LOG.info(
+            "word_by_word diagnostics: raw_runs=%d interior_gaps=%d medium_gaps=%d "
+            "total_duration=%.2fs medium_rate=%.3f/s durations=%s "
+            "min=%.3f median=%.3f mean=%.3f max=%.3f threshold=%.3f/s -> decision=%s",
+            n_gaps,
+            len(real_gaps),
+            medium_count,
+            total_duration,
+            medium_rate,
+            [round(float(g), 3) for g in gap_durations],
+            float(np.min(gap_durations)),
+            float(np.median(gap_durations)),
+            float(np.mean(gap_durations)),
+            float(np.max(gap_durations)),
+            _WORD_BY_WORD_RATE_THRESHOLD,
+            decision,
+        )
+        return decision
