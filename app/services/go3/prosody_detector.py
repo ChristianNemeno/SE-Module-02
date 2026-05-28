@@ -9,7 +9,7 @@ import parselmouth  # type: ignore[import-untyped]
 from app.models.prosody_detector import ProsodyFlags
 
 _INAUDIBLE_RMS_THRESHOLD = 0.01
-_MONOTONE_F0_STD_THRESHOLD = 30.0       # Hz — empirical: humans trying to read flat sit ~25-40Hz (lexical stress + breath groups); expressive reading 38-69Hz; raw neural TTS 15-25Hz. 30Hz catches deliberate flat human speech while leaving normal expressive reading above the bar.
+_MONOTONE_F0_STD_THRESHOLD_ST = 2.5     # semitones — std of voiced F0 expressed as 12*log2(f0/median_f0). Speaker-normalized: removes pitch-register bias (a child at ~280Hz mean and an adult at ~110Hz are compared on the same scale). Literature places monotone perception at ~2-3 ST; 2.5 sits mid-range.
 _MIN_DURATION_SECONDS = 5.0
 _MIN_VOICED_FRAMES = 10
 _SAMPLE_RATE = 16000
@@ -49,14 +49,24 @@ class ProsodyAmplitudeDetector:
         return float(np.mean(rms)) < _INAUDIBLE_RMS_THRESHOLD
 
     def _detect_monotone(self, wav_path: str) -> bool:
-        """True if F0 standard deviation is below threshold — indicates flat/unexpressive reading."""
+        """True if semitone-std of voiced F0 is below threshold — indicates flat/unexpressive reading."""
         snd: Any = parselmouth.Sound(wav_path)  # type: ignore[no-untyped-call]
         pitch: Any = snd.to_pitch()  # type: ignore[no-untyped-call]
         f0_values: np.ndarray = np.array(pitch.selected_array["frequency"])  # type: ignore[no-untyped-call]
         voiced: np.ndarray = f0_values[f0_values > 0]
         if len(voiced) < _MIN_VOICED_FRAMES:
             return False
-        return float(np.std(voiced)) < _MONOTONE_F0_STD_THRESHOLD
+        # Speaker-normalize: express F0 variation in semitones around the speaker's median.
+        # Median (vs mean) shrugs off occasional Praat octave-jump errors.
+        median_f0: float = float(np.median(voiced))
+        semitones: np.ndarray = 12.0 * np.log2(voiced / median_f0)
+        st_std: float = float(np.std(semitones))
+        decision: bool = st_std < _MONOTONE_F0_STD_THRESHOLD_ST
+        _LOG.info(
+            "monotone diagnostics: voiced_frames=%d median_f0=%.1fHz st_std=%.3f threshold=%.3fST -> decision=%s",
+            len(voiced), median_f0, st_std, _MONOTONE_F0_STD_THRESHOLD_ST, decision,
+        )
+        return decision
 
     def _detect_word_by_word(self, y: np.ndarray, sr: int | float) -> bool:
         """True if mean inter-word silence gap exceeds threshold — indicates halting, word-by-word pacing."""

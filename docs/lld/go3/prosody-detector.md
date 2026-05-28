@@ -14,7 +14,7 @@ None — stateless, instantiated per request via `dependencies.py`.
 |---|---|---|
 | `detect(wav_path)` | Loads WAV once, runs all three checks, returns `ProsodyFlags` | Audio < 5s → all-False immediately |
 | `_detect_inaudible(y)` | Mean RMS < threshold → `inaudible_reading: True` | Silent WAV returns True |
-| `_detect_monotone(wav_path)` | F0 std-dev < 20 Hz → `monotone_reading: True` | < 10 voiced frames → False |
+| `_detect_monotone(wav_path)` | Semitone std of voiced F0 around the median < 2.5 ST → `monotone_reading: True` (speaker-normalized; literature places monotone perception at ~2-3 ST) | < 10 voiced frames → False |
 | `_detect_word_by_word(y, sr)` | Mean IOI > 0.8s → `word_by_word_reading: True` | < 3 onset events → False |
 
 ## Diagrams

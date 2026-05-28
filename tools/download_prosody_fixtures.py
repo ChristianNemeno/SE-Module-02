@@ -5,9 +5,9 @@ Fetches 5 natural-prosody WAVs from hf-internal-testing/librispeech_asr_dummy
 into tests/fixtures/prosody_samples/expected_false/, and 5 synthesized WAVs
 from facebook/mms-tts-eng into expected_true_monotone/.
 
-MMS-TTS alone may not push F0 std dev below the detector's 20Hz threshold,
-so any clip whose F0 std dev measures >=20Hz gets pitch-flattened via
-parselmouth so the monotone detector trips.
+MMS-TTS alone may not push F0 variation below the detector's semitone
+threshold, so each synthesized clip is pitch-flattened via parselmouth
+(F0 std measured in semitones around the median, matching the detector).
 
 Safe to re-run — skips if all 10 fixtures exist unless --force is passed.
 """
@@ -29,7 +29,7 @@ from transformers import AutoTokenizer, VitsModel
 
 _SAMPLE_RATE = 16000
 _MIN_DURATION_S = 5.5
-_F0_FLATTEN_THRESHOLD_HZ = 20.0
+_F0_FLATTEN_THRESHOLD_ST = 1.5  # semitones — verification target. Detector trips at 2.5 ST; flattened clips should sit comfortably below this; natural LibriSpeech should sit above.
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _OUT_ROOT = _REPO_ROOT / "tests" / "fixtures" / "prosody_samples"
 _FALSE_DIR = _OUT_ROOT / "expected_false"
@@ -44,13 +44,17 @@ _TTS_SENTENCES: list[str] = [
 ]
 
 
-def _measure_f0_std(wav_path: Path) -> float:
-    """Returns F0 std dev (Hz) over voiced frames. Mirrors detector's own logic."""
+def _measure_f0_semitone_std(wav_path: Path) -> float:
+    """Returns F0 std in semitones around the median over voiced frames. Mirrors detector's own logic."""
     snd: Any = parselmouth.Sound(str(wav_path))  # type: ignore[no-untyped-call]
     pitch: Any = snd.to_pitch()  # type: ignore[no-untyped-call]
     f0: np.ndarray = np.array(pitch.selected_array["frequency"])
     voiced = f0[f0 > 0]
-    return float(np.std(voiced)) if len(voiced) >= 10 else 0.0
+    if len(voiced) < 10:
+        return 0.0
+    median_f0 = float(np.median(voiced))
+    semitones = 12.0 * np.log2(voiced / median_f0)
+    return float(np.std(semitones))
 
 
 def _flatten_pitch(wav_path: Path) -> None:
@@ -101,9 +105,9 @@ class MmsTtsSynthesizer:
     """Loads facebook/mms-tts-eng once; synthesizes each sentence as 16kHz mono WAV.
     Post-processes with pitch flattening if raw F0 std dev meets/exceeds the threshold."""
 
-    def __init__(self, sentences: list[str], flatten_if_above_hz: float = _F0_FLATTEN_THRESHOLD_HZ) -> None:
+    def __init__(self, sentences: list[str], flatten_if_above_st: float = _F0_FLATTEN_THRESHOLD_ST) -> None:
         self._sentences = sentences
-        self._threshold = flatten_if_above_hz
+        self._threshold = flatten_if_above_st
         self._model: VitsModel | None = None
         self._tokenizer: Any = None
 
@@ -113,7 +117,7 @@ class MmsTtsSynthesizer:
             self._tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-eng")
 
     def synthesize(self, out_dir: Path) -> list[tuple[Path, float, bool]]:
-        """Returns (path, final_f0_std_hz, was_flattened) per sample."""
+        """Returns (path, final_f0_st_std, was_flattened) per sample."""
         out_dir.mkdir(parents=True, exist_ok=True)
         self._load()
         assert self._model is not None and self._tokenizer is not None
@@ -128,9 +132,9 @@ class MmsTtsSynthesizer:
                 raise RuntimeError(f"MMS-TTS sample rate {sr} != expected {_SAMPLE_RATE}")
             path = out_dir / f"mms_tts_{idx:02d}.wav"
             sf.write(str(path), audio, _SAMPLE_RATE, subtype="PCM_16")
-            # Always flatten — drops F0 std dev to near-0 deterministically, avoids boundary cases at the 20Hz threshold
+            # Always flatten — drops F0 variation to near-0 deterministically, avoids boundary cases at the detector threshold
             _flatten_pitch(path)
-            std_hz = _measure_f0_std(path)
+            st_std = _measure_f0_semitone_std(path)
             flattened = True
             duration_s = len(audio) / _SAMPLE_RATE
             if duration_s < 5.5:
@@ -138,7 +142,7 @@ class MmsTtsSynthesizer:
                     f"{path.name} synthesized at {duration_s:.2f}s — below 5.5s safety margin "
                     f"for detector's 5.0s gate; lengthen sentence #{idx}"
                 )
-            results.append((path, std_hz, flattened))
+            results.append((path, st_std, flattened))
         return results
 
 
@@ -159,15 +163,15 @@ def main() -> int:
 
     print("=== Fetching LibriSpeech (expected monotone=False) ===")
     for p in LibriSpeechFetcher().fetch(_FALSE_DIR):
-        std = _measure_f0_std(p)
-        marker = "OK" if std > _F0_FLATTEN_THRESHOLD_HZ else "WARN low F0 var"
-        print(f"  {p.relative_to(_REPO_ROOT)}  F0_std={std:.1f}Hz  {marker}")
+        st = _measure_f0_semitone_std(p)
+        marker = "OK" if st > _F0_FLATTEN_THRESHOLD_ST else "WARN low F0 var"
+        print(f"  {p.relative_to(_REPO_ROOT)}  F0_std={st:.2f}ST  {marker}")
 
     print("\n=== Synthesizing MMS-TTS (expected monotone=True) ===")
-    for path, std_hz, flattened in MmsTtsSynthesizer(_TTS_SENTENCES).synthesize(_TRUE_DIR):
+    for path, st_std, flattened in MmsTtsSynthesizer(_TTS_SENTENCES).synthesize(_TRUE_DIR):
         tag = "[flattened]" if flattened else "[raw]"
-        marker = "OK" if std_hz < _F0_FLATTEN_THRESHOLD_HZ else "FAIL would not trip"
-        print(f"  {path.relative_to(_REPO_ROOT)}  F0_std={std_hz:.1f}Hz {tag}  {marker}")
+        marker = "OK" if st_std < _F0_FLATTEN_THRESHOLD_ST else "FAIL would not trip"
+        print(f"  {path.relative_to(_REPO_ROOT)}  F0_std={st_std:.2f}ST {tag}  {marker}")
 
     print("\nDone.")
     return 0
