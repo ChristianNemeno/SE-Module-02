@@ -1,4 +1,5 @@
 # app/services/go3/cv_detector.py
+import math
 import time
 import urllib.request
 from pathlib import Path
@@ -14,13 +15,15 @@ from app.models.cv_detector import CVFlags
 _FRAME_SAMPLE_RATE = 5
 _INDEX_TIP_LANDMARK = 8
 _LEFT_IRIS_LANDMARK = 468
+_RIGHT_IRIS_LANDMARK = 473
 _TEXT_REGION_MIN_Y = 0.33
 _TEXT_REGION_MIN_X = 0.25
 _TEXT_REGION_MAX_X = 0.75
 _FINGER_POINTING_FRAME_RATIO = 0.20
 _MIN_HAND_VISIBLE_FRAMES = 10
-_GAZE_SHIFT_DELTA = 0.15
-_GAZE_SHIFT_COUNT_THRESHOLD = 3
+_GAZE_SHIFT_DELTA = 0.10
+_GAZE_SHIFT_COUNT_THRESHOLD = 2
+_NO_FACE_THRESHOLD = 3
 _MIN_DETECTION_CONFIDENCE = 0.5
 _TIMEOUT_SECONDS = 120.0
 
@@ -73,7 +76,8 @@ class CVDetector:
         hand_visible_frames = 0
         pointing_frames = 0
         gaze_shifts = 0
-        prev_iris_x: float | None = None
+        no_face_frames = 0
+        prev_xy: tuple[float, float] | None = None
         frame_index = 0
         try:
             while True:
@@ -93,14 +97,16 @@ class CVDetector:
                     hand_visible_frames += 1
                 if in_region:
                     pointing_frames += 1
-                iris_x = self._iris_x(image)
-                if iris_x is not None:
+                xy = self._iris_xy(image)
+                if xy is not None:
                     if (
-                        prev_iris_x is not None
-                        and abs(iris_x - prev_iris_x) > _GAZE_SHIFT_DELTA
+                        prev_xy is not None
+                        and math.hypot(xy[0] - prev_xy[0], xy[1] - prev_xy[1]) > _GAZE_SHIFT_DELTA
                     ):
                         gaze_shifts += 1
-                    prev_iris_x = iris_x
+                    prev_xy = xy
+                else:
+                    no_face_frames += 1
                 frame_index += 1
         finally:
             capture.release()  # type: ignore[no-untyped-call]
@@ -112,7 +118,10 @@ class CVDetector:
                 hand_visible_frames >= _MIN_HAND_VISIBLE_FRAMES
                 and pointing_frames / hand_visible_frames >= _FINGER_POINTING_FRAME_RATIO
             ),
-            "loss_of_place": gaze_shifts >= _GAZE_SHIFT_COUNT_THRESHOLD,
+            "loss_of_place": (
+                no_face_frames >= _NO_FACE_THRESHOLD
+                or gaze_shifts >= _GAZE_SHIFT_COUNT_THRESHOLD
+            ),
         }
 
     def _finger_in_text_region(self, image: Any) -> tuple[bool, bool]:
@@ -125,13 +134,22 @@ class CVDetector:
         in_region = tip.y > _TEXT_REGION_MIN_Y and _TEXT_REGION_MIN_X < tip.x < _TEXT_REGION_MAX_X
         return in_region, True
 
-    def _iris_x(self, image: Any) -> float | None:
-        """Normalized x of the left iris (landmark 468), or None if no face detected this frame."""
+    def _iris_xy(self, image: Any) -> tuple[float, float] | None:
+        """Returns the combined (x, y) gaze position for this frame, or None if no face is detected.
+
+        Averages the left iris center (landmark 468) and the right iris center (landmark 473)
+        in normalized image coordinates. Averaging both irises is more robust than tracking a
+        single eye: it smooths out per-eye detection noise, squint/blink artifacts, and
+        asymmetric head pose, and yields a single point that can be compared frame-to-frame
+        with a 2D Euclidean distance for loss-of-place gaze-shift detection.
+        """
         result = self._face_mesh.detect(image)
         faces = result.face_landmarks
         if not faces:
             return None
-        return float(faces[0][_LEFT_IRIS_LANDMARK].x)
+        left = faces[0][_LEFT_IRIS_LANDMARK]
+        right = faces[0][_RIGHT_IRIS_LANDMARK]
+        return (float(left.x + right.x) / 2.0, float(left.y + right.y) / 2.0)
 
 
 _detector: CVDetector | None = None
