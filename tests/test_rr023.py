@@ -21,7 +21,6 @@ def _zero_counts() -> MiscueCounts:
         omission=0,
         insertion=0,
         repetition=0,
-        refusal_to_pronounce=0,
     )
 
 
@@ -52,14 +51,15 @@ def test_3_errors_in_50_words_is_instructional(engine: ScoringEngine) -> None:
 
 
 def test_7_errors_in_50_words_is_frustration(engine: ScoringEngine) -> None:
-    """7 errors in 50 words → 86% → Frustration."""
+    """7 errors in 50 words (all 5 categories now count) → 86% → Frustration."""
     words = [_w("x", 0.0, 0.5), _w("y", 29.5, 30.0)]
     counts = _zero_counts()
     counts["correct"] = 43
-    counts["mispronunciation"] = 3
+    counts["mispronunciation"] = 2
     counts["substitution"] = 2
     counts["omission"] = 1
-    counts["refusal_to_pronounce"] = 1
+    counts["insertion"] = 1
+    counts["repetition"] = 1
     result = engine.score(words, counts, total_passage_words=50)
     assert _approx(result["word_recognition_pct"], 86.0)
     assert result["reading_level"] == "Frustration"
@@ -75,16 +75,16 @@ def test_0_errors_in_52_words_is_independent(engine: ScoringEngine) -> None:
     assert result["reading_level"] == "Independent"
 
 
-def test_insertions_and_repetitions_are_not_errors(engine: ScoringEngine) -> None:
-    """Per Phil-IRI: insertion and repetition do NOT lower word-recognition."""
+def test_insertions_and_repetitions_count_as_errors(engine: ScoringEngine) -> None:
+    """Updated Phil-IRI counting: insertion and repetition each count as 1 error per event."""
     words = [_w("x", 0.0, 0.5), _w("y", 29.5, 30.0)]
     counts = _zero_counts()
-    counts["correct"] = 50
+    counts["correct"] = 40
     counts["insertion"] = 5
     counts["repetition"] = 5
     result = engine.score(words, counts, total_passage_words=50)
-    assert _approx(result["word_recognition_pct"], 100.0)
-    assert result["reading_level"] == "Independent"
+    assert _approx(result["word_recognition_pct"], 80.0)
+    assert result["reading_level"] == "Frustration"
 
 
 def test_empty_transcript_returns_zero_wpm(engine: ScoringEngine) -> None:

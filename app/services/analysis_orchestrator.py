@@ -130,7 +130,6 @@ class AnalysisOrchestrator:
             omission=result.omission,
             insertion=result.insertion,
             repetition=result.repetition,
-            refusal_to_pronounce=result.refusal_to_pronounce,
             finger_pointing=result.finger_pointing,
             loss_of_place=result.loss_of_place,
             monotone_reading=result.monotone_reading,

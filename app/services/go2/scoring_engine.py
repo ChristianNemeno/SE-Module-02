@@ -32,14 +32,15 @@ class ScoringEngine:
         return total_passage_words / duration * 60.0
 
     def _word_recognition_pct(self, counts: MiscueCounts, total: int) -> float:
-        """Errors = mispron + sub + omission + refusal. NOT insertion or repetition."""
+        """Errors = mispron + sub + omission + insertion + repetition (all 5 Phil-IRI categories)."""
         if total == 0:
             return 0.0
         errors = (
             counts["mispronunciation"]
             + counts["substitution"]
             + counts["omission"]
-            + counts["refusal_to_pronounce"]
+            + counts["insertion"]
+            + counts["repetition"]
         )
         return (total - errors) / total * 100.0
 

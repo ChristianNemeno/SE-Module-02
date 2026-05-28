@@ -18,7 +18,6 @@ class AssessmentResult(BaseModel):
     omission: int
     insertion: int
     repetition: int
-    refusal_to_pronounce: int
 
     # GO3 — behavioral flags
     finger_pointing: bool

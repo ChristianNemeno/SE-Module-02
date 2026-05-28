@@ -17,7 +17,6 @@ def _go2() -> dict[str, Any]:
         "omission": 1,
         "insertion": 0,
         "repetition": 1,
-        "refusal_to_pronounce": 0,
     }
 
 
@@ -38,7 +37,7 @@ def test_valid_merge_returns_assessment_result() -> None:
     assert result.wpm == 80.0
     assert result.reading_level == "Instructional"
     assert result.loss_of_place is True
-    assert len(result.model_dump()) == 16
+    assert len(result.model_dump()) == 15
 
 
 def test_missing_field_raises_value_error() -> None:

@@ -9,7 +9,6 @@ type MiscueType = Literal[
     "omission",
     "insertion",
     "repetition",
-    "refusal_to_pronounce",
 ]
 
 
@@ -22,17 +21,16 @@ class MiscueCounts(TypedDict):
     omission: int
     insertion: int
     repetition: int
-    refusal_to_pronounce: int
 
 
 class MiscueDetail(TypedDict):
-    """One aligned word decision — its category plus the words/timing involved."""
+    """One aligned event — a single word or a contiguous phrase, per Phil-IRI counting rules."""
 
     miscue_type: MiscueType
-    passage_word: str | None  # None for insertion / repetition
-    transcript_word: str | None  # None for omission
-    start: float | None  # spoken-word start secs; None when no transcript word
-    end: float | None  # spoken-word end secs; None when no transcript word
+    passage_word: str | None  # None for insertion; may be a multi-word phrase for omission/substitution
+    transcript_word: str | None  # None for omission; may be a multi-word phrase for insertion/repetition/substitution
+    start: float | None  # spoken span start secs; None when no transcript counterpart
+    end: float | None  # spoken span end secs; None when no transcript counterpart
 
 
 class MiscueClassifierProtocol(Protocol):

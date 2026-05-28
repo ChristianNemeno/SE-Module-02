@@ -5,7 +5,7 @@ from app.models.assessment import AssessmentResult
 REQUIRED_GO2_FIELDS: list[str] = [
     "wpm", "word_recognition_pct", "reading_level",
     "correct", "mispronunciation", "substitution",
-    "omission", "insertion", "repetition", "refusal_to_pronounce",
+    "omission", "insertion", "repetition",
 ]
 REQUIRED_GO3_FIELDS: list[str] = [
     "finger_pointing", "loss_of_place", "monotone_reading",

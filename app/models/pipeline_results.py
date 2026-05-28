@@ -13,7 +13,6 @@ class GO2Result(TypedDict):
     omission: int
     insertion: int
     repetition: int
-    refusal_to_pronounce: int
 
 
 class GO3Result(TypedDict):
